@@ -85,15 +85,6 @@ tested, but _rendering_ is unverified. Treat the UI as needing a manual pass.
 
 ## Known rough edges
 
-### The packaged Windows binary crashes on launch
-
-`pnpm --filter @rook/desktop tauri:build` produces a working binary and
-installers, but the **release** executable panics immediately on start
-(exit `0xC0000409`). The frontend builds, type-checks and runs fine under the
-Vite dev server, and `cargo check` passes, so this is specific to the packaged
-release build. Under investigation; the development path
-(`pnpm dev:desktop`, or `pnpm desktop:tauri`) is unaffected.
-
 ### The desktop session token is not encrypted at rest
 
 It is stored via Tauri's store plugin in the OS application-data directory,

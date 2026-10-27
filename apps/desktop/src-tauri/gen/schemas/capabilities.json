@@ -1,1 +1,17 @@
-{"default":{"identifier":"default","description":"The minimum set of native permissions the Rook frontend needs. Anything not listed here is unavailable to the webview, including all filesystem, shell, process and HTTP-client access.","local":true,"windows":["main"],"permissions":["core:default","store:allow-load","store:allow-get","store:allow-set","store:allow-delete","store:allow-save","opener:allow-open-url"]}}
+{
+  "default": {
+    "identifier": "default",
+    "description": "The minimum set of native permissions the Rook frontend needs. Anything not listed here is unavailable to the webview, including all filesystem, shell, process and HTTP-client access.",
+    "local": true,
+    "windows": ["main"],
+    "permissions": [
+      "core:default",
+      "store:allow-load",
+      "store:allow-get",
+      "store:allow-set",
+      "store:allow-delete",
+      "store:allow-save",
+      "opener:allow-open-url"
+    ]
+  }
+}
