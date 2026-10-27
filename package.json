@@ -38,6 +38,7 @@
     "dev:desktop": "pnpm --filter @rook/desktop dev",
     "desktop:tauri": "pnpm --filter @rook/desktop tauri:dev",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit",
+    "server:init": "node scripts/init-server-env.mjs",
     "server:build": "docker compose -f docker-compose.server.yml --env-file .env.server build",
     "server:up": "docker compose -f docker-compose.server.yml --env-file .env.server up -d --build",
     "server:down": "docker compose -f docker-compose.server.yml --env-file .env.server down",
