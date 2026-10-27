@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@rook/ui';
 import { useServices } from './lib/services-context.js';
 import { useSessionStore } from './stores/session.js';
+import { useServerStore } from './lib/server-config.js';
 import { AuthScreen } from './screens/AuthScreen.jsx';
 import { AppShell } from './screens/AppShell.jsx';
 
@@ -22,6 +23,8 @@ export function App() {
   const signIn = useSessionStore((state) => state.signIn);
   const markSignedOut = useSessionStore((state) => state.markSignedOut);
 
+  const loadServer = useServerStore((state) => state.load);
+
   const [fatalError, setFatalError] = useState<string | undefined>(undefined);
   // StrictMode mounts effects twice in development; this keeps restoration
   // from running two validation requests on every launch.
@@ -35,6 +38,11 @@ export function App() {
 
     void (async () => {
       try {
+        // The persisted server address has to be applied before any request:
+        // the API client reads it per call, so restoring a token first would
+        // send it to whatever the compiled-in default happens to be.
+        await loadServer();
+
         const token = await restore();
         if (token === undefined || cancelled) return;
 
@@ -73,7 +81,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [api, restore, signIn, markSignedOut]);
+  }, [api, restore, signIn, markSignedOut, loadServer]);
 
   if (status === 'restoring') {
     return (

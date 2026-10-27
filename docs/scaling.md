@@ -4,7 +4,7 @@ The path from one instance of everything to a deployment that handles serious
 volume, in the order the stages should actually happen — each triggered by a
 measurement rather than a guess.
 
-**Read this first:** the section on sharding describes an *interface*, not an
+**Read this first:** the section on sharding describes an _interface_, not an
 implementation. What is built and what is not is stated explicitly below.
 
 ---
@@ -26,15 +26,15 @@ today. Nothing needs changing.
 
 **What makes that true:**
 
-| Concern | Why multiple instances work |
-| --- | --- |
-| Sessions | Rows in PostgreSQL, not process memory. Any instance validates any token. |
-| Rate limits | Redis-backed, so limits are shared. An in-memory limiter would silently multiply every limit by the instance count. |
-| Realtime fan-out | Events travel through Redis pub/sub, so a client on gateway A receives events produced by API instance B. |
-| Outbox relay | Rows are claimed `for update skip locked`, so N gateways share the work rather than duplicating it. |
-| Media jobs | Claimed from BullMQ; processing is idempotent and guarded by SQL status transitions, so two workers handed the same asset cannot corrupt it. |
-| Job scheduling | BullMQ repeatable jobs, so an hourly sweep runs once across the fleet, not once per instance. |
-| Recovery | Confirmed-but-unprocessed assets are found from PostgreSQL at worker startup, so a flushed queue loses no work. |
+| Concern          | Why multiple instances work                                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sessions         | Rows in PostgreSQL, not process memory. Any instance validates any token.                                                                    |
+| Rate limits      | Redis-backed, so limits are shared. An in-memory limiter would silently multiply every limit by the instance count.                          |
+| Realtime fan-out | Events travel through Redis pub/sub, so a client on gateway A receives events produced by API instance B.                                    |
+| Outbox relay     | Rows are claimed `for update skip locked`, so N gateways share the work rather than duplicating it.                                          |
+| Media jobs       | Claimed from BullMQ; processing is idempotent and guarded by SQL status transitions, so two workers handed the same asset cannot corrupt it. |
+| Job scheduling   | BullMQ repeatable jobs, so an hourly sweep runs once across the fleet, not once per instance.                                                |
+| Recovery         | Confirmed-but-unprocessed assets are found from PostgreSQL at worker startup, so a flushed queue loses no work.                              |
 
 **What to watch:** `DATABASE_POOL_MAX` is per process. Multiply it by instance
 count and keep the total below the server's `max_connections`. Past roughly
@@ -125,7 +125,7 @@ against several databases would give you routing and nothing else.
 So why does the interface exist? Because the expensive part of sharding later
 is never the routing function — it is discovering that a hundred queries
 silently assumed they could join across the whole dataset. Forcing every data
-access to name its partition key *now*, while there is one database and being
+access to name its partition key _now_, while there is one database and being
 wrong costs nothing, keeps that assumption from being made. Claiming the
 interface provides sharding would be the real mistake, so it does not.
 
@@ -141,7 +141,7 @@ Two things deliberately cross the boundary:
   hash with no community context, so it cannot be routed by community.
 - **"List my communities" fans out.** It runs once per app launch, per user,
   and returns a handful of rows — the acceptable shape for a fan-out. Anything
-  that fans out per *message* would not be.
+  that fans out per _message_ would not be.
 
 ### If it were ever actually needed
 
@@ -199,15 +199,15 @@ means more jobs contending for the same CPU with more memory in flight.
 
 ## What to measure before each stage
 
-| Decision | Measure |
-| --- | --- |
-| Add API instances | `rook_http_request_duration_seconds` p99, event-loop lag |
+| Decision              | Measure                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| Add API instances     | `rook_http_request_duration_seconds` p99, event-loop lag                                               |
 | Add gateway instances | `rook_realtime_connections`, memory per instance, `rook_realtime_dropped_total{reason="backpressure"}` |
-| Add workers | Queue depth, `rook_media_job_duration_seconds` |
-| Add PgBouncer | `pg_stat_activity` count versus `max_connections`; pool wait time |
-| Add read replicas | Primary CPU split between read and write; slow-query log composition |
-| Partition `messages` | `messages` table and index size; autovacuum duration; insert latency trend |
-| Shard | Write throughput at the primary *after* every stage above |
+| Add workers           | Queue depth, `rook_media_job_duration_seconds`                                                         |
+| Add PgBouncer         | `pg_stat_activity` count versus `max_connections`; pool wait time                                      |
+| Add read replicas     | Primary CPU split between read and write; slow-query log composition                                   |
+| Partition `messages`  | `messages` table and index size; autovacuum duration; insert latency trend                             |
+| Shard                 | Write throughput at the primary _after_ every stage above                                              |
 
 The ordering matters more than any individual threshold. Each stage is cheaper
 and less risky than the one after it, and skipping ahead usually means solving

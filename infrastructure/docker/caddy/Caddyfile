@@ -1,0 +1,55 @@
+# Internal reverse proxy.
+#
+# Cloudflare terminates TLS at the edge and cloudflared forwards plain HTTP
+# into this container, so Caddy serves port 80 only and issues no certificates.
+# `auto_https off` is required: without it Caddy would try to provision certs
+# for these hostnames and fail, because nothing reaches it on port 443.
+#
+# It exists so the tunnel needs one rule per hostname pointing at one service,
+# instead of path-based ingress rules configured in the Cloudflare dashboard.
+# Routing lives here, in version control, next to the services it routes to.
+
+{
+	auto_https off
+	admin off
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}
+
+# --- API and realtime gateway, one origin ---------------------------------
+#
+# The desktop client derives its WebSocket URL as same-origin + /ws, so both
+# must answer on this hostname.
+:80 {
+	# The gateway. Matched first: it is a prefix of nothing else, but ordering
+	# here is explicit rather than relying on Caddy's specificity rules.
+	handle /ws* {
+		reverse_proxy realtime:4001 {
+			# WebSocket upgrades pass through untouched; Caddy handles this
+			# natively, but the long read timeout matters -- a chat socket is
+			# idle between messages and must not be severed for it.
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+
+	# Health and metrics are deliberately NOT exposed. They are unauthenticated
+	# and leak request volumes and error rates, so they stay on the internal
+	# network for the home server to scrape.
+	handle /health* {
+		respond "not found" 404
+	}
+	handle /metrics {
+		respond "not found" 404
+	}
+
+	# Everything else is the HTTP API.
+	handle {
+		reverse_proxy api:4000
+	}
+}

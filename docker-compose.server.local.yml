@@ -1,0 +1,21 @@
+# Verification override: publishes the edge proxy to the host.
+#
+#   docker compose -f docker-compose.server.yml -f docker-compose.server.local.yml \
+#     --env-file .env.server up -d
+#
+# The server stack publishes no ports -- everything reaches it through the
+# Cloudflare tunnel. That is the right default, but it also means you cannot
+# curl it from the host to check a deployment.
+#
+# This override exposes Caddy on 127.0.0.1:8080 so the stack can be exercised
+# locally, exactly as the tunnel will reach it. Loopback only, so it is not
+# reachable from the network even while applied.
+#
+# Note: presigned storage URLs still point at the public files hostname, since
+# that is what a real client must resolve. Uploads therefore cannot be
+# completed through this override -- only authorised.
+
+services:
+  caddy:
+    ports:
+      - '127.0.0.1:8080:80'

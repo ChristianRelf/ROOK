@@ -1,0 +1,300 @@
+# Rook, deployed on a home server behind a Cloudflare tunnel.
+#
+#   docker compose -f docker-compose.server.yml --env-file .env.server up -d --build
+#
+# Differences from docker-compose.yml, which is development only:
+#
+#   * The application services are built and run here, not just infrastructure.
+#   * Nothing is published to the host except the tunnel's own outbound
+#     connection. There are no inbound ports and nothing to forward: the
+#     attack surface is whatever Cloudflare routes to the tunnel.
+#   * All state is in named volumes, so `docker compose down` (without -v)
+#     keeps the database, uploads and queue intact.
+#   * Credentials come from .env.server, which is not in version control.
+#
+# Container names are left to Compose (derived from the project name
+# `rook-server`), so this stack can run alongside the development one without
+# colliding. Use `docker compose -f docker-compose.server.yml ... logs api`
+# rather than `docker logs rook-api`.
+#
+# Setup, DNS and the tunnel's ingress rules: docs/self-hosting.md
+
+name: rook-server
+
+# Shared build definition, so the three Node services are one image built once.
+x-service-image: &service-image
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile
+  image: rook/services:latest
+  restart: unless-stopped
+  env_file: .env.server
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    storage:
+      condition: service_healthy
+  # Structured JSON logs, bounded so a long-running server cannot fill the disk.
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '5'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Data stores
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.server}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.server}
+      POSTGRES_DB: ${POSTGRES_DB:-rook}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    volumes:
+      # PostgreSQL 18 expects the mount here, not at ./data: PGDATA is a
+      # version-specific subdirectory, which is what allows an in-place
+      # `pg_upgrade --link` later.
+      - postgres-data:/var/lib/postgresql
+    command:
+      - 'postgres'
+      - '-c'
+      - 'max_connections=100'
+      - '-c'
+      - 'shared_buffers=256MB'
+      - '-c'
+      - 'effective_cache_size=768MB'
+      # Logs anything slower than a second, which is what you want to see on a
+      # small server.
+      - '-c'
+      - 'log_min_duration_statement=1000'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-rook}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:8.8.4-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command:
+      - 'redis-server'
+      # appendonly preserves queued media jobs across a restart. Nothing here
+      # is the only copy of anything -- it can all be rebuilt from PostgreSQL --
+      # but losing the queue means re-processing, which is wasted work.
+      - '--appendonly'
+      - 'yes'
+      - '--maxmemory'
+      - '${REDIS_MAXMEMORY:-512mb}'
+      # noeviction, not an LRU policy: silently evicting a queued job or a rate
+      # limit counter is worse than failing the write that would exceed memory.
+      - '--maxmemory-policy'
+      - 'noeviction'
+      - '--requirepass'
+      - '${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.server}'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  storage:
+    image: chrislusf/seaweedfs:4.51
+    restart: unless-stopped
+    environment:
+      S3_BUCKET_MEDIA: ${S3_BUCKET_MEDIA:-rook-media}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env.server}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env.server}
+      S3_ALLOWED_ORIGINS: ${S3_ALLOWED_ORIGINS:-tauri://localhost,http://tauri.localhost,http://localhost:1420}
+    # The identity file is written from the environment at startup rather than
+    # mounted, so the credentials live in exactly one place (.env.server). A
+    # committed JSON file with the same values would silently drift out of step
+    # with what the services actually authenticate with.
+    #
+    # Declaring an identity also disables anonymous access, which is what makes
+    # the bucket genuinely private.
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        cat > /tmp/s3.json <<JSON
+        {
+          "identities": [
+            {
+              "name": "rook",
+              "credentials": [
+                {
+                  "accessKey": "$${S3_ACCESS_KEY_ID}",
+                  "secretKey": "$${S3_SECRET_ACCESS_KEY}"
+                }
+              ],
+              "actions": ["Read", "Write", "List", "Tagging", "Admin"]
+            }
+          ]
+        }
+        JSON
+        exec weed server           -dir=/data           -ip=storage           -master.volumeSizeLimitMB=1024           -s3           -s3.port=8333           -s3.config=/tmp/s3.json           -s3.allowedOrigins="$${S3_ALLOWED_ORIGINS}"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test:
+        - 'CMD-SHELL'
+        # 403 is the healthy answer once an identity is configured: it proves
+        # S3 is listening and enforcing auth.
+        - 'curl -s -o /dev/null -w "%{http_code}" http://localhost:8333/ | grep -qE "^(200|403)$$"'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Creates the media bucket, then exits. Safe to re-run: an existing bucket
+  # is not an error.
+  storage-init:
+    image: chrislusf/seaweedfs:4.51
+    restart: 'no'
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        BUCKET="${S3_BUCKET_MEDIA:-rook-media}"
+
+        # `s3.bucket.create` errors when the bucket already exists, so the
+        # create is allowed to fail and existence is then verified instead.
+        # Without this a second `docker compose up` fails here, and anything
+        # depending on service_completed_successfully never starts.
+        echo "s3.bucket.create -name $$BUCKET" | weed shell -master=storage:9333 || true
+
+        if echo "s3.bucket.list" | weed shell -master=storage:9333 | grep -q "$$BUCKET"; then
+          echo "[rook] bucket $$BUCKET is present"
+        else
+          echo "[rook] bucket $$BUCKET could not be created" >&2
+          exit 1
+        fi
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+
+  # Applies pending migrations, then exits. The services below wait for it to
+  # complete successfully, so none of them can start against an out-of-date
+  # schema -- and because the migrator takes an advisory lock, this stays safe
+  # even if it somehow ran twice.
+  migrate:
+    <<: *service-image
+    restart: 'no'
+    entrypoint: ['node', '/app/packages/database/dist/cli/migrate.js', 'up']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *service-image
+    environment:
+      SERVICE: api
+      HEALTH_PORT: '4000'
+      # Binds all interfaces so Caddy can reach it over the Docker network.
+      # Nothing is published to the host, so this is not internet-exposed.
+      API_HOST: 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+
+  realtime:
+    <<: *service-image
+    environment:
+      SERVICE: realtime
+      HEALTH_PORT: '4001'
+      REALTIME_HOST: 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  media-worker:
+    <<: *service-image
+    environment:
+      SERVICE: media-worker
+      WORKER_HEALTH_PORT: '4002'
+      HEALTH_PORT: '4002'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # Edge
+  # ---------------------------------------------------------------------------
+
+  # Routes one hostname to both the API and the gateway, so the tunnel needs a
+  # single ingress rule rather than dashboard path matching.
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - realtime
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # The only component that talks to the outside world, and it does so with an
+  # outbound connection. No inbound ports, no port forwarding, no firewall
+  # rules -- which is the main reason to prefer a tunnel on a home network.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.4
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', 'run', '--token', '${CLOUDFLARE_TUNNEL_TOKEN}']
+    depends_on:
+      - caddy
+      - storage
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  postgres-data:
+  redis-data:
+  storage-data:
+  caddy-data:
+  caddy-config:

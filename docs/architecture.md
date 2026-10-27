@@ -111,7 +111,7 @@ deliberate:
 
 1. **Sortable.** Lexicographic byte order equals creation order, so
    `order by id desc` on messages is chronological and needs no timestamp
-   column in the index. A message id *is* a pagination cursor.
+   column in the index. A message id _is_ a pagination cursor.
 2. **Index-friendly.** Inserts land at the right edge of the B-tree instead of
    scattering across it as UUIDv4 does. For a table taking the bulk of the
    write volume, that is the difference between a compact index and constant
@@ -120,7 +120,7 @@ deliberate:
    partitioning scheme can be derived from the key itself.
 
 Generating them in the application rather than the database means an id is
-known *before* the insert — so it can be logged, returned to an optimistic
+known _before_ the insert — so it can be logged, returned to an optimistic
 client, and written into the outbox event in the same transaction.
 
 ### Cursor pagination, never offset
@@ -267,7 +267,7 @@ metadata.
 **Confirmation is the security-critical step.** At that point the client claims
 "I uploaded it", and nothing it says is trusted:
 
-- the object must exist at the key *we* authorised (keys are derived from the
+- the object must exist at the key _we_ authorised (keys are derived from the
   asset id, never the filename — that is how `../../etc/passwd` becomes a
   traversal bug);
 - its real size comes from storage, so understating `declaredByteSize` gains
@@ -278,7 +278,7 @@ metadata.
 
 The worker then re-encodes every variant from decoded pixels, which drops all
 metadata — EXIF on a phone photo routinely carries GPS coordinates — and
-enforces pixel and dimension limits read from the header *before* any decode. A
+enforces pixel and dimension limits read from the header _before_ any decode. A
 20 KB PNG can declare 50,000 × 50,000 pixels and expand to tens of gigabytes.
 
 Processing is idempotent: status transitions are guarded in SQL
@@ -295,11 +295,11 @@ five times is noise that hides real failures.
 
 Three stores, split by who owns the data:
 
-| State | Owner | Why |
-| --- | --- | --- |
-| Communities, channels, members | TanStack Query | Ordinary server state; refetch and cache are the right model |
-| Messages | A dedicated Zustand store | Written by three paths at once |
-| Selection, dialogs, drafts | Zustand | Local; must survive refetches |
+| State                          | Owner                     | Why                                                          |
+| ------------------------------ | ------------------------- | ------------------------------------------------------------ |
+| Communities, channels, members | TanStack Query            | Ordinary server state; refetch and cache are the right model |
+| Messages                       | A dedicated Zustand store | Written by three paths at once                               |
+| Selection, dialogs, drafts     | Zustand                   | Local; must survive refetches                                |
 
 Messages get their own store because they are mutated by realtime events,
 optimistic sends and history pagination simultaneously, and reconciling three
@@ -354,7 +354,7 @@ cosmetic:
   a degraded minute into a cold-start stampede.
 - **`/health/ready`** consults dependencies, each marked critical or not.
   Losing Redis degrades the API (rate limits, typing) but does not make it
-  unready; losing Redis makes the *gateway* unready, because without it the
+  unready; losing Redis makes the _gateway_ unready, because without it the
   gateway has nothing to deliver.
 - **`/metrics`** is Prometheus text. Each service builds its own registry
   rather than using the global default, so tests can assert on one and discard

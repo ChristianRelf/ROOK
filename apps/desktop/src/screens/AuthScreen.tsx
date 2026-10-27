@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react';
+import { Server } from 'lucide-react';
 import { Button, Field, Input, Panel } from '@rook/ui';
 import { loginRequestSchema, registerRequestSchema } from '@rook/contracts';
 import { ApiRequestError } from '../lib/api-client.js';
 import { useServices } from '../lib/services-context.js';
 import { useSessionStore } from '../stores/session.js';
+import { InvalidServerUrlError, useServerStore } from '../lib/server-config.js';
 
 /**
  * Sign-in and registration.
@@ -16,6 +18,12 @@ import { useSessionStore } from '../stores/session.js';
  * Server-side field errors are mapped back onto the inputs that caused them,
  * so "that username is taken" appears next to the username rather than as a
  * banner the user has to connect to a field themselves.
+ *
+ * The server address lives here too, collapsed by default. A self-hosted
+ * client has to be pointed somewhere, and the sign-in screen is the only place
+ * the user can do that before authenticating -- but surfacing it permanently
+ * would put infrastructure configuration above the password field, so it is
+ * tucked behind a link unless it is already non-default or has just failed.
  */
 
 type Mode = 'signIn' | 'register';
@@ -32,9 +40,37 @@ export function AuthScreen({ initialError }: { readonly initialError?: string | 
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
 
+  const serverUrl = useServerStore((state) => state.serverUrl);
+  const isDefaultServer = useServerStore((state) => state.isDefault);
+  const setServerUrl = useServerStore((state) => state.setServerUrl);
+
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | undefined>(initialError);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Shown when the address has been changed from the default, or when a
+  // connection failed -- the two cases where the user needs to see it.
+  const [serverDraft, setServerDraft] = useState(serverUrl);
+  const [serverError, setServerError] = useState<string | undefined>(undefined);
+  const [serverSaved, setServerSaved] = useState(false);
+  const [showServer, setShowServer] = useState(!isDefaultServer || initialError !== undefined);
+
+  async function applyServerUrl(): Promise<void> {
+    setServerError(undefined);
+    setServerSaved(false);
+
+    try {
+      await setServerUrl(serverDraft);
+      setServerSaved(true);
+      // Clearing it lets the user retry sign-in against the new address
+      // without a stale "could not reach the server" still on screen.
+      setFormError(undefined);
+    } catch (error) {
+      setServerError(
+        error instanceof InvalidServerUrlError ? error.message : 'Could not use that address.',
+      );
+    }
+  }
 
   function switchMode(next: Mode): void {
     setMode(next);
@@ -226,6 +262,45 @@ export function AuthScreen({ initialError }: { readonly initialError?: string | 
             <Button type="submit" variant="primary" fullWidth loading={submitting}>
               {mode === 'signIn' ? 'Sign in' : 'Create account'}
             </Button>
+
+            {showServer ? (
+              <div className="flex flex-col gap-2 border-t border-line pt-3">
+                <Field
+                  label="Server"
+                  htmlFor="server-url"
+                  hint={
+                    serverSaved ? 'Saved. Sign in to connect.' : 'The address of your Rook server.'
+                  }
+                  error={serverError}
+                >
+                  <Input
+                    id="server-url"
+                    value={serverDraft}
+                    onChange={(event) => {
+                      setServerDraft(event.target.value);
+                      setServerSaved(false);
+                    }}
+                    onBlur={() => {
+                      if (serverDraft.trim() !== serverUrl) void applyServerUrl();
+                    }}
+                    placeholder="https://rook.example.com"
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    invalid={serverError !== undefined}
+                    className="font-mono text-xs"
+                  />
+                </Field>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowServer(true)}
+                className="inline-flex items-center justify-center gap-1.5 text-2xs text-ink-subtle transition-colors hover:text-ink-muted"
+              >
+                <Server className="size-3" />
+                Change server
+              </button>
+            )}
           </form>
         </Panel>
 

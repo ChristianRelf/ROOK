@@ -108,8 +108,8 @@ services:
       retries: 30
       start_period: 10s
 
-  # Creates the media bucket, then exits. Runs on every `up`, which is safe
-  # because bucket creation is idempotent.
+  # Creates the media bucket, then exits. Safe to re-run: an existing bucket
+  # is not an error.
   storage-init:
     image: chrislusf/seaweedfs:4.51
     container_name: rook-storage-init
@@ -120,10 +120,21 @@ services:
     entrypoint: ['/bin/sh', '-c']
     command:
       - |
-        set -e
-        echo "[rook] ensuring bucket ${S3_BUCKET_MEDIA:-rook-media} exists"
-        echo "s3.bucket.create -name ${S3_BUCKET_MEDIA:-rook-media}" | weed shell -master=storage:9333
-        echo "s3.bucket.list" | weed shell -master=storage:9333
+        set -eu
+        BUCKET="${S3_BUCKET_MEDIA:-rook-media}"
+
+        # `s3.bucket.create` errors when the bucket already exists, so the
+        # create is allowed to fail and existence is then verified instead.
+        # Without this a second `docker compose up` fails here, and anything
+        # depending on service_completed_successfully never starts.
+        echo "s3.bucket.create -name $$BUCKET" | weed shell -master=storage:9333 || true
+
+        if echo "s3.bucket.list" | weed shell -master=storage:9333 | grep -q "$$BUCKET"; then
+          echo "[rook] bucket $$BUCKET is present"
+        else
+          echo "[rook] bucket $$BUCKET could not be created" >&2
+          exit 1
+        fi
 
 volumes:
   postgres-data:

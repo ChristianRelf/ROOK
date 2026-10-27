@@ -37,7 +37,13 @@
     "dev:worker": "pnpm --filter @rook/media-worker dev",
     "dev:desktop": "pnpm --filter @rook/desktop dev",
     "desktop:tauri": "pnpm --filter @rook/desktop tauri:dev",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit",
+    "server:build": "docker compose -f docker-compose.server.yml --env-file .env.server build",
+    "server:up": "docker compose -f docker-compose.server.yml --env-file .env.server up -d --build",
+    "server:down": "docker compose -f docker-compose.server.yml --env-file .env.server down",
+    "server:logs": "docker compose -f docker-compose.server.yml --env-file .env.server logs -f",
+    "server:ps": "docker compose -f docker-compose.server.yml --env-file .env.server ps -a",
+    "server:verify": "docker compose -f docker-compose.server.yml -f docker-compose.server.local.yml --env-file .env.server up -d && node tests/stack/verify-server-stack.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

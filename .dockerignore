@@ -1,0 +1,54 @@
+# Keep the host's build artifacts out of the image.
+#
+# This is not just a size optimisation -- it is correctness. pnpm's
+# per-package `node_modules` contains symlinks with absolute paths into the
+# host's store (`C:/Users/.../node_modules/.pnpm/...` on Windows). Copying
+# them shadows the symlinks created by the install inside the container, and
+# every import then resolves to a path that does not exist, failing at runtime
+# with `ERR_MODULE_NOT_FOUND`.
+#
+# The same applies to `dist` and `*.tsbuildinfo`: a stale host build would
+# make `tsc -b` skip work and ship whatever happened to be on the developer's
+# disk rather than a clean build.
+
+# Dependencies -- installed inside the image
+**/node_modules
+
+# Build output -- compiled inside the image
+**/dist
+**/*.tsbuildinfo
+
+# Rust build output for the desktop client: large, and not used server-side
+apps/desktop/src-tauri/target
+
+# Secrets. Configuration is injected at runtime via env_file, never baked in.
+.env
+.env.*
+!.env.example
+!.env.server.example
+
+# Version control and tooling
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Local infrastructure state
+.docker-data
+
+# Tests and coverage are not run in the image
+coverage
+**/*.test.ts
+**/*.test.tsx
+tests
+
+# Documentation and editor files
+docs
+*.md
+!README.md
+.editorconfig
+.prettierignore
+
+# Logs
+*.log

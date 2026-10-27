@@ -13,6 +13,10 @@ target/
 .env
 .env.*
 !.env.example
+!.env.server.example
+# Build-time client defaults: public URLs only, no secrets, so it is tracked
+# to keep the desktop build reproducible.
+!apps/desktop/.env.production
 
 # Logs
 *.log

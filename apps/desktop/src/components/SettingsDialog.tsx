@@ -6,6 +6,7 @@ import { uploadToStorage } from '../lib/api-client.js';
 import { useServices } from '../lib/services-context.js';
 import { useSessionStore } from '../stores/session.js';
 import { platform } from '../lib/platform.js';
+import { useServerStore } from '../lib/server-config.js';
 import { Modal } from './Dialogs.jsx';
 
 /**
@@ -21,6 +22,8 @@ export function SettingsDialog({ onClose }: { readonly onClose: () => void }) {
   const { api } = useServices();
   const user = useSessionStore((state) => state.user);
   const setUser = useSessionStore((state) => state.setUser);
+
+  const endpoints = useServerStore((state) => state.endpoints);
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [saving, setSaving] = useState(false);
@@ -193,6 +196,16 @@ export function SettingsDialog({ onClose }: { readonly onClose: () => void }) {
               Email <span className="text-ink-muted">{user.email}</span>
             </p>
           </div>
+        </section>
+
+        <section className="flex flex-col gap-2 border-t border-line pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+            Connection
+          </h3>
+          <p className="font-mono text-2xs text-ink-muted">{endpoints.apiUrl}</p>
+          <p className="text-2xs text-ink-subtle">
+            To connect to a different server, sign out and change the address on the sign-in screen.
+          </p>
         </section>
 
         <section className="flex flex-col gap-2 border-t border-line pt-4">

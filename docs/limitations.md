@@ -24,11 +24,18 @@ was exercised against real PostgreSQL, Redis and object storage:
 
 Test counts: 145 unit, 37 integration, 13 end-to-end.
 
+Additionally verified in the containerised deployment: the production Docker
+image builds, migrations apply inside it, all three services report healthy,
+and the full flow (register, community, channel, persisted message, live
+WebSocket delivery, upload authorisation) works through the Caddy edge proxy
+exactly as the Cloudflare tunnel reaches it -- 15 checks via
+`pnpm server:verify`.
+
 **Not verified:** the user interface has not been tested by driving a real
 browser or the packaged desktop window — no browser automation was available in
 the environment where this was built. The frontend compiles, type-checks
 against the shared contracts, builds, and its message-store logic is unit
-tested, but *rendering* is unverified. Treat the UI as needing a manual pass.
+tested, but _rendering_ is unverified. Treat the UI as needing a manual pass.
 
 ---
 
@@ -36,47 +43,56 @@ tested, but *rendering* is unverified. Treat the UI as needing a manual pass.
 
 ### Communication features
 
-| Not built | Note |
-| --- | --- |
-| Voice and video | Explicitly out of scope. Would need WebRTC signalling and TURN. |
-| Direct messages | Only community channels exist. A DM is a channel with a different membership model; the schema would need a nullable `community_id` or a separate table. |
-| Threads and replies | No `parent_message_id`. |
-| Reactions | No table. |
-| Message search | No full-text index. `tsvector` on `messages.content` plus a GIN index is the obvious first step. |
-| Mentions and notifications | Usernames are stable and mention-ready, but nothing parses or notifies. |
-| Read state / unread badges | Nothing tracks what a user has seen. Needs a `channel_read_state` table keyed by (user, channel) holding the last-read message id. |
-| File types other than images | The pipeline is image-only by design. Other types need their own validation and processing. |
-| Message pinning, forwarding, drafts sync | — |
+| Not built                                | Note                                                                                                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Voice and video                          | Explicitly out of scope. Would need WebRTC signalling and TURN.                                                                                          |
+| Direct messages                          | Only community channels exist. A DM is a channel with a different membership model; the schema would need a nullable `community_id` or a separate table. |
+| Threads and replies                      | No `parent_message_id`.                                                                                                                                  |
+| Reactions                                | No table.                                                                                                                                                |
+| Message search                           | No full-text index. `tsvector` on `messages.content` plus a GIN index is the obvious first step.                                                         |
+| Mentions and notifications               | Usernames are stable and mention-ready, but nothing parses or notifies.                                                                                  |
+| Read state / unread badges               | Nothing tracks what a user has seen. Needs a `channel_read_state` table keyed by (user, channel) holding the last-read message id.                       |
+| File types other than images             | The pipeline is image-only by design. Other types need their own validation and processing.                                                              |
+| Message pinning, forwarding, drafts sync | —                                                                                                                                                        |
 
 ### Administration and moderation
 
-| Not built | Note |
-| --- | --- |
-| Invite links | Joining is by a community-wide code with no expiry, no use limit, and no revocation. Anyone with the code can join. |
-| Role management UI | Roles exist in the schema and are enforced, but nothing can change a member's role after they join. |
-| Kick, ban, mute | No endpoints. |
-| Audit log | Session rows are retained, but no administrative action log. |
-| Community deletion | The capability is defined; no endpoint implements it. |
-| Account deletion | Deliberately absent. `messages.author_id` is `ON DELETE RESTRICT`, so a user with messages cannot be deleted. Doing it properly needs an anonymisation strategy, which is a product decision as much as a technical one. |
-| Email verification and password reset | No email is sent anywhere. There is no SMTP integration, so a forgotten password is unrecoverable. **This is the most significant gap for any real deployment.** |
-| Two-factor authentication | — |
+| Not built                             | Note                                                                                                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Invite links                          | Joining is by a community-wide code with no expiry, no use limit, and no revocation. Anyone with the code can join.                                                                                                      |
+| Role management UI                    | Roles exist in the schema and are enforced, but nothing can change a member's role after they join.                                                                                                                      |
+| Kick, ban, mute                       | No endpoints.                                                                                                                                                                                                            |
+| Audit log                             | Session rows are retained, but no administrative action log.                                                                                                                                                             |
+| Community deletion                    | The capability is defined; no endpoint implements it.                                                                                                                                                                    |
+| Account deletion                      | Deliberately absent. `messages.author_id` is `ON DELETE RESTRICT`, so a user with messages cannot be deleted. Doing it properly needs an anonymisation strategy, which is a product decision as much as a technical one. |
+| Email verification and password reset | No email is sent anywhere. There is no SMTP integration, so a forgotten password is unrecoverable. **This is the most significant gap for any real deployment.**                                                         |
+| Two-factor authentication             | —                                                                                                                                                                                                                        |
 
 ### Client
 
-| Not built | Note |
-| --- | --- |
-| Member list pagination | The endpoint is cursor-paginated; the sidebar renders only the first page and never requests more. A community over ~50 members shows a truncated list. |
-| Light theme | Tokens are structured for it (`:root` custom properties) but only dark values are defined. |
-| Keyboard shortcuts | Enter/Shift+Enter in the composer and Escape in dialogs only. No channel switching, no quick switcher. |
-| Offline queue | Messages composed while offline are not queued for later. A send fails visibly with a retry button, and the retry is manual. |
-| Window state persistence | Size and position are not remembered. |
-| Auto-update | No updater configured. |
-| Accessibility audit | Dialogs set `aria-modal` and move focus, controls are labelled, and focus styles are keyboard-only — but there has been no screen-reader pass and no focus-trap inside dialogs (focus can leave a dialog by tabbing). |
-| Animated image support | An animated GIF is processed to a still thumbnail. Only the first frame is read, deliberately, to keep memory bounded. |
+| Not built                | Note                                                                                                                                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member list pagination   | The endpoint is cursor-paginated; the sidebar renders only the first page and never requests more. A community over ~50 members shows a truncated list.                                                               |
+| Light theme              | Tokens are structured for it (`:root` custom properties) but only dark values are defined.                                                                                                                            |
+| Keyboard shortcuts       | Enter/Shift+Enter in the composer and Escape in dialogs only. No channel switching, no quick switcher.                                                                                                                |
+| Offline queue            | Messages composed while offline are not queued for later. A send fails visibly with a retry button, and the retry is manual.                                                                                          |
+| Window state persistence | Size and position are not remembered.                                                                                                                                                                                 |
+| Auto-update              | No updater configured.                                                                                                                                                                                                |
+| Accessibility audit      | Dialogs set `aria-modal` and move focus, controls are labelled, and focus styles are keyboard-only — but there has been no screen-reader pass and no focus-trap inside dialogs (focus can leave a dialog by tabbing). |
+| Animated image support   | An animated GIF is processed to a still thumbnail. Only the first frame is read, deliberately, to keep memory bounded.                                                                                                |
 
 ---
 
 ## Known rough edges
+
+### The packaged Windows binary crashes on launch
+
+`pnpm --filter @rook/desktop tauri:build` produces a working binary and
+installers, but the **release** executable panics immediately on start
+(exit `0xC0000409`). The frontend builds, type-checks and runs fine under the
+Vite dev server, and `cargo check` passes, so this is specific to the packaged
+release build. Under investigation; the development path
+(`pnpm dev:desktop`, or `pnpm desktop:tauri`) is unaffected.
 
 ### The desktop session token is not encrypted at rest
 

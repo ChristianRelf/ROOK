@@ -6,10 +6,16 @@
     <!--
       A strict Content-Security-Policy for the webview.
 
-      `connect-src` is deliberately broad for http/https/ws/wss because the API
-      and storage endpoints are configured at runtime, so they cannot be
-      enumerated here. Everything that executes is locked down instead:
-      no inline scripts, no eval, no plugins, no framing.
+      `connect-src` is deliberately broad for http/https/ws/wss because the
+      server address is configured at runtime, so it cannot be enumerated
+      here. Everything that executes is locked down instead: no inline
+      scripts, no eval, no plugins, no framing.
+
+      `ipc:` and `http://ipc.localhost` are required for Tauri's IPC, which is
+      how the frontend reaches the store plugin. Tauri applies its own CSP from
+      tauri.conf.json in a release build, and the two intersect -- so omitting
+      IPC here silently breaks persistence in the packaged app while leaving
+      the dev server working.
 
       `img-src` includes blob: for local previews of a file the user just
       picked, before it has been uploaded.
@@ -21,7 +27,7 @@
                style-src 'self' 'unsafe-inline';
                img-src 'self' data: blob: http: https:;
                font-src 'self';
-               connect-src 'self' http: https: ws: wss:;
+               connect-src 'self' ipc: http://ipc.localhost http: https: ws: wss:;
                media-src 'self' blob:;
                object-src 'none';
                base-uri 'none';

@@ -5,12 +5,12 @@
 
 ## Context
 
-A message must be persisted *and* delivered to connected clients. The naive
+A message must be persisted _and_ delivered to connected clients. The naive
 implementation does them in sequence:
 
 ```ts
 await db.insertMessage(message);
-await redis.publish(channel, message);   // separate failure domain
+await redis.publish(channel, message); // separate failure domain
 ```
 
 Those two steps fail independently, and both orderings are broken:
@@ -34,9 +34,9 @@ them to Redis, and marks them published.
 
 ```ts
 await db.transaction(async (tx) => {
-  const message = await messages.send(tx, input);   // the row
-  await events.messageCreated(tx, message);         // the event
-});                                                 // both, or neither
+  const message = await messages.send(tx, input); // the row
+  await events.messageCreated(tx, message); // the event
+}); // both, or neither
 ```
 
 ## Why

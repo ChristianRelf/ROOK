@@ -36,7 +36,8 @@ import {
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export interface RealtimeClientOptions {
-  readonly url: string;
+  /** Read on each connect attempt, so a changed server address is picked up. */
+  readonly getUrl: () => string;
   readonly getToken: () => string | undefined;
   /** Channels to subscribe to on connect. Read fresh on every attempt. */
   readonly getChannelIds: () => ChannelId[];
@@ -124,7 +125,7 @@ export function createRealtimeClient(options: RealtimeClientOptions): RealtimeCl
 
     let next: WebSocket;
     try {
-      next = new WebSocket(options.url);
+      next = new WebSocket(options.getUrl());
     } catch (error) {
       scheduleReconnect(error instanceof Error ? error.message : 'could not open socket');
       return;

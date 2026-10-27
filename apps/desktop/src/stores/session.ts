@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { CurrentUser } from '@rook/contracts';
-import { platform } from '../lib/platform.js';
+import { tokenStore } from '../lib/platform.js';
 
 /**
  * Authentication state.
@@ -42,12 +42,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   async signIn(token, user) {
     // Persisted before the state flips, so a crash immediately after sign-in
     // does not leave the user authenticated in memory but not on disk.
-    await platform.tokens.write(token);
+    await tokenStore.write(token);
     set({ status: 'signedIn', token, user, notice: undefined });
   },
 
   async signOut(notice) {
-    await platform.tokens.clear();
+    await tokenStore.clear();
     set({ status: 'signedOut', token: undefined, user: undefined, notice });
   },
 
@@ -56,7 +56,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 
   async restore() {
-    const token = await platform.tokens.read();
+    const token = await tokenStore.read();
 
     if (token === undefined) {
       set({ status: 'signedOut' });

@@ -22,24 +22,24 @@ instance at once, turning a degraded minute into a cold-start stampede.
 "Should this instance receive traffic?" Consults dependencies concurrently,
 each with its own timeout.
 
-| Status | Meaning | HTTP |
-| --- | --- | --- |
-| `healthy` | Everything responding | 200 |
-| `degraded` | A non-critical dependency is down | 200 |
-| `unhealthy` | A critical dependency is down, or shutting down | 503 |
+| Status      | Meaning                                         | HTTP |
+| ----------- | ----------------------------------------------- | ---- |
+| `healthy`   | Everything responding                           | 200  |
+| `degraded`  | A non-critical dependency is down               | 200  |
+| `unhealthy` | A critical dependency is down, or shutting down | 503  |
 
 `degraded` still serves traffic on purpose. Which dependencies count as
 critical differs by service, and the difference is intentional:
 
-| Service | Critical | Non-critical |
-| --- | --- | --- |
-| api | PostgreSQL | Redis, object storage |
-| realtime | PostgreSQL, Redis | --- |
-| media-worker | PostgreSQL, object storage | --- |
+| Service      | Critical                   | Non-critical          |
+| ------------ | -------------------------- | --------------------- |
+| api          | PostgreSQL                 | Redis, object storage |
+| realtime     | PostgreSQL, Redis          | ---                   |
+| media-worker | PostgreSQL, object storage | ---                   |
 
 Redis is non-critical in the API because losing it costs rate limiting and
 typing indicators; taking every instance out of rotation over that is a worse
-outage than the degradation. It *is* critical in the gateway, because without
+outage than the degradation. It _is_ critical in the gateway, because without
 it the gateway has no events to deliver.
 
 ### `GET /metrics`
@@ -52,16 +52,16 @@ error rates.
 
 ## Metrics worth alerting on
 
-| Metric | Watch for | Why it matters |
-| --- | --- | --- |
-| `rook_outbox_backlog` | Sustained growth | **The most important signal.** Realtime delivery is falling behind durable writes: messages are being saved but not delivered. |
-| `rook_http_request_duration_seconds` | p99 rising | Usually database contention or pool exhaustion. |
-| `rook_realtime_dropped_total{reason="backpressure"}` | Any sustained rate | Clients cannot keep up, or the gateway is overloaded. |
-| `rook_realtime_dropped_total{reason="rate_limit"}` | Spikes | A misbehaving or hostile client. |
-| `rook_realtime_connections{state="open"}` | Approaching instance capacity | Time to add a gateway. |
-| `rook_media_jobs_total{outcome="failed"}` | Rising | Either bad uploads (expected, bounded) or a broken worker (not). |
-| `rook_database_query_duration_seconds` | p99 by operation | Points at the specific query, since operations are named. |
-| `nodejs_eventloop_lag_seconds` | Above ~100 ms | Something CPU-bound is blocking the loop. |
+| Metric                                               | Watch for                     | Why it matters                                                                                                                 |
+| ---------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `rook_outbox_backlog`                                | Sustained growth              | **The most important signal.** Realtime delivery is falling behind durable writes: messages are being saved but not delivered. |
+| `rook_http_request_duration_seconds`                 | p99 rising                    | Usually database contention or pool exhaustion.                                                                                |
+| `rook_realtime_dropped_total{reason="backpressure"}` | Any sustained rate            | Clients cannot keep up, or the gateway is overloaded.                                                                          |
+| `rook_realtime_dropped_total{reason="rate_limit"}`   | Spikes                        | A misbehaving or hostile client.                                                                                               |
+| `rook_realtime_connections{state="open"}`            | Approaching instance capacity | Time to add a gateway.                                                                                                         |
+| `rook_media_jobs_total{outcome="failed"}`            | Rising                        | Either bad uploads (expected, bounded) or a broken worker (not).                                                               |
+| `rook_database_query_duration_seconds`               | p99 by operation              | Points at the specific query, since operations are named.                                                                      |
+| `nodejs_eventloop_lag_seconds`                       | Above ~100 ms                 | Something CPU-bound is blocking the loop.                                                                                      |
 
 Suggested starting thresholds:
 
@@ -145,15 +145,15 @@ blast radius of a bad deploy smaller.
 
 Values that must change for production:
 
-| Variable | Why |
-| --- | --- |
-| `SESSION_TOKEN_PEPPER` | `openssl rand -base64 48`. Rotating it invalidates every session. |
-| `POSTGRES_PASSWORD` | The compose default is public. |
-| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Same. |
-| `CORS_ALLOWED_ORIGINS` | Exact origins. Never `*`. |
-| `NODE_ENV=production` | Enables HSTS and proxy-header trust. |
-| `LOG_PRETTY=false` | Keeps logs machine-readable. |
-| `DATABASE_SSL=true` | For any managed PostgreSQL. |
+| Variable                                    | Why                                                               |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `SESSION_TOKEN_PEPPER`                      | `openssl rand -base64 48`. Rotating it invalidates every session. |
+| `POSTGRES_PASSWORD`                         | The compose default is public.                                    |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Same.                                                             |
+| `CORS_ALLOWED_ORIGINS`                      | Exact origins. Never `*`.                                         |
+| `NODE_ENV=production`                       | Enables HSTS and proxy-header trust.                              |
+| `LOG_PRETTY=false`                          | Keeps logs machine-readable.                                      |
+| `DATABASE_SSL=true`                         | For any managed PostgreSQL.                                       |
 
 ---
 
@@ -192,12 +192,12 @@ latter; the former surfaces as an asset that cannot be fetched.
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-| --- | --- |
-| Messages save but do not appear live | Relay stopped, or Redis unreachable. Check `rook_outbox_backlog` and the gateway's readiness. |
-| Clients reconnect in a loop | Check the close code. 4001 means the token is rejected; 4003 means a client build is too old. |
-| Uploads fail at the PUT | Storage CORS does not allow the client origin, or the presigned URL expired (`MEDIA_UPLOAD_URL_TTL_SECONDS`). |
-| Uploads confirm but never become ready | No worker running, or jobs failing. Check the worker's logs and `rook_media_jobs_total`. |
-| `413` on a send | Body over the 256 KiB limit. Attachments do not go through here, so something is sending a very large JSON body. |
-| API refuses to start, mentioning migrations | `pnpm db:migrate` has not been run, or a migration file was edited after being applied. |
-| Everything slow, latency rising together | Pool exhaustion. Compare `pg_stat_activity` against pool size x instance count. |
+| Symptom                                     | Likely cause                                                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Messages save but do not appear live        | Relay stopped, or Redis unreachable. Check `rook_outbox_backlog` and the gateway's readiness.                    |
+| Clients reconnect in a loop                 | Check the close code. 4001 means the token is rejected; 4003 means a client build is too old.                    |
+| Uploads fail at the PUT                     | Storage CORS does not allow the client origin, or the presigned URL expired (`MEDIA_UPLOAD_URL_TTL_SECONDS`).    |
+| Uploads confirm but never become ready      | No worker running, or jobs failing. Check the worker's logs and `rook_media_jobs_total`.                         |
+| `413` on a send                             | Body over the 256 KiB limit. Attachments do not go through here, so something is sending a very large JSON body. |
+| API refuses to start, mentioning migrations | `pnpm db:migrate` has not been run, or a migration file was edited after being applied.                          |
+| Everything slow, latency rising together    | Pool exhaustion. Compare `pg_stat_activity` against pool size x instance count.                                  |

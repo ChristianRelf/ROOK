@@ -81,7 +81,11 @@ export class ApiRequestError extends Error {
 }
 
 export interface ApiClientOptions {
-  readonly baseUrl: string;
+  /**
+   * Read per request, not captured: the user can change the server address at
+   * runtime, and the client must follow without being rebuilt.
+   */
+  readonly getBaseUrl: () => string;
   /** Returns the current token, or undefined when signed out. */
   readonly getToken: () => string | undefined;
   /** Called when the server rejects the token, so the app can sign out. */
@@ -99,7 +103,7 @@ interface RequestOptions<Schema extends z.ZodType> {
 }
 
 export function createApiClient(options: ApiClientOptions) {
-  const { baseUrl, getToken, onAuthFailure } = options;
+  const { getBaseUrl, getToken, onAuthFailure } = options;
 
   async function request<Schema extends z.ZodType>(
     config: RequestOptions<Schema>,
@@ -119,7 +123,7 @@ export function createApiClient(options: ApiClientOptions) {
 
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}${config.path}`, {
+      response = await fetch(`${getBaseUrl()}${config.path}`, {
         method: config.method,
         headers,
         ...(config.body !== undefined ? { body: JSON.stringify(config.body) } : {}),

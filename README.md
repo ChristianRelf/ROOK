@@ -14,12 +14,12 @@ and is not implemented; read it before planning work on top of this.
 
 ## Requirements
 
-| Tool | Version | Notes |
-| --- | --- | --- |
-| Node.js | >= 22.12 | Tested on 24.15 |
-| pnpm | >= 9.15 | `corepack enable pnpm` |
-| Docker | with Compose v2 | PostgreSQL, Redis and object storage |
-| Rust | >= 1.77 | Only needed to run the desktop shell |
+| Tool    | Version         | Notes                                |
+| ------- | --------------- | ------------------------------------ |
+| Node.js | >= 22.12        | Tested on 24.15                      |
+| pnpm    | >= 9.15         | `corepack enable pnpm`               |
+| Docker  | with Compose v2 | PostgreSQL, Redis and object storage |
+| Rust    | >= 1.77         | Only needed to run the desktop shell |
 
 The desktop app additionally needs the platform's webview toolchain --
 see [Tauri's prerequisites](https://tauri.app/start/prerequisites/). On Linux
@@ -60,10 +60,10 @@ Register an account in the app, create a community, create a channel, and send
 a message. To see realtime delivery, sign in as a second account -- either
 register another, or use the seeded ones:
 
-| Username | Password |
-| --- | --- |
-| `ada` | `rook-dev-password-ada` |
-| `grace` | `rook-dev-password-grace` |
+| Username | Password                  |
+| -------- | ------------------------- |
+| `ada`    | `rook-dev-password-ada`   |
+| `grace`  | `rook-dev-password-grace` |
 
 `pnpm db:seed` prints the community's join code.
 
@@ -79,19 +79,29 @@ On Windows, also avoid the ranges `netsh int ipv4 show excludedportrange
 protocol=tcp` reports: Hyper-V reserves them and a bind there fails with a
 permissions error rather than "in use".
 
+### Running it for real
+
+The steps above are for local development. To host it so other people can
+connect -- the whole backend in Docker behind a Cloudflare tunnel, with no port
+forwarding -- see **[docs/self-hosting.md](docs/self-hosting.md)**.
+
+The desktop client ships with a default server address but exposes a **Change
+server** field on the sign-in screen, so a binary is not tied to one
+deployment.
+
 ---
 
 ## What runs where
 
-| Service | Port | Purpose |
-| --- | --- | --- |
-| `apps/api` | 4000 | HTTP API: auth, communities, channels, messages, media authorisation |
-| `apps/realtime` | 4001 | WebSocket gateway, and the outbox relay |
-| `services/media-worker` | 4002 | Image processing and scheduled housekeeping (health only) |
-| `apps/desktop` | 1420 | Vite dev server for the frontend |
-| PostgreSQL | 5432 | Source of truth |
-| Redis | 6379 | Cache, presence, rate limits, job queue, event fan-out |
-| Object storage | 8333 | S3-compatible (SeaweedFS locally) |
+| Service                 | Port | Purpose                                                              |
+| ----------------------- | ---- | -------------------------------------------------------------------- |
+| `apps/api`              | 4000 | HTTP API: auth, communities, channels, messages, media authorisation |
+| `apps/realtime`         | 4001 | WebSocket gateway, and the outbox relay                              |
+| `services/media-worker` | 4002 | Image processing and scheduled housekeeping (health only)            |
+| `apps/desktop`          | 1420 | Vite dev server for the frontend                                     |
+| PostgreSQL              | 5432 | Source of truth                                                      |
+| Redis                   | 6379 | Cache, presence, rate limits, job queue, event fan-out               |
+| Object storage          | 8333 | S3-compatible (SeaweedFS locally)                                    |
 
 Every service exposes `/health/live`, `/health/ready` and `/metrics`.
 
@@ -128,6 +138,13 @@ pnpm test:e2e            # needs infra + `pnpm dev` running
 # Production build
 pnpm build               # compiles every package, app and the frontend
 pnpm --filter @rook/desktop tauri:build   # packaged desktop binary
+
+# Self-hosted server (Docker, behind a Cloudflare tunnel)
+pnpm server:up           # build and start the whole backend
+pnpm server:ps           # status of every container
+pnpm server:logs         # follow all logs
+pnpm server:down         # stop, keeping all data
+pnpm server:verify       # publish the proxy locally and smoke-test the stack
 ```
 
 ---
@@ -136,11 +153,11 @@ pnpm --filter @rook/desktop tauri:build   # packaged desktop binary
 
 Three suites, separated by what they need:
 
-| Suite | Needs | Covers |
-| --- | --- | --- |
-| `pnpm test` | nothing | Domain logic, validation, auth primitives, image processing, the message store |
-| `pnpm test:integration` | infra + migrations | Real SQL: idempotency, cursor pagination, the outbox transaction, presigned uploads |
-| `pnpm test:e2e` | infra + running services | The whole flow over HTTP and WebSocket, as a black box |
+| Suite                   | Needs                    | Covers                                                                              |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `pnpm test`             | nothing                  | Domain logic, validation, auth primitives, image processing, the message store      |
+| `pnpm test:integration` | infra + migrations       | Real SQL: idempotency, cursor pagination, the outbox transaction, presigned uploads |
+| `pnpm test:e2e`         | infra + running services | The whole flow over HTTP and WebSocket, as a black box                              |
 
 Unit tests run with no infrastructure on purpose: a fresh clone with no Docker
 still gets a meaningful signal. The integration suite fails with setup
@@ -181,14 +198,16 @@ reviewable commit.
 
 ## Documentation
 
-| Document | What it covers |
-| --- | --- |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, and the reasoning behind each boundary |
-| [docs/scaling.md](docs/scaling.md) | The staged path from one instance to many, and the sharding strategy -- including what is only an interface today |
-| [docs/limitations.md](docs/limitations.md) | Everything not implemented, and known rough edges |
-| [docs/operations.md](docs/operations.md) | Health checks, metrics, deployment order, what to watch |
-| [docs/adr/](docs/adr/) | Decision records for the choices that are hard to reverse |
-| [.env.example](.env.example) | Every environment variable, with its purpose |
+| Document                                     | What it covers                                                                                                    |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [docs/self-hosting.md](docs/self-hosting.md) | Running the backend on a home server behind a Cloudflare tunnel, and distributing the client                      |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, and the reasoning behind each boundary                                                        |
+| [docs/scaling.md](docs/scaling.md)           | The staged path from one instance to many, and the sharding strategy -- including what is only an interface today |
+| [docs/limitations.md](docs/limitations.md)   | Everything not implemented, and known rough edges                                                                 |
+| [docs/operations.md](docs/operations.md)     | Health checks, metrics, deployment order, what to watch                                                           |
+| [docs/adr/](docs/adr/)                       | Decision records for the choices that are hard to reverse                                                         |
+| [.env.example](.env.example)                 | Every environment variable, with its purpose                                                                      |
+| [.env.server.example](.env.server.example)   | The same, for a self-hosted deployment                                                                            |
 
 ---
 
@@ -217,7 +236,7 @@ assumed:
   "open a URL". No filesystem, shell, process or HTTP-client access --
   see [capabilities](apps/desktop/src-tauri/capabilities/README.md).
 
-`docs/limitations.md` is equally explicit about what is *not* hardened.
+`docs/limitations.md` is equally explicit about what is _not_ hardened.
 
 ---
 

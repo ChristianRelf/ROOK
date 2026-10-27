@@ -7,7 +7,7 @@ import { AppServicesContext, type AppServices } from './services-context.js';
 import { useSessionStore } from '../stores/session.js';
 import { useMessagesStore } from '../stores/messages.js';
 import { useUiStore } from '../stores/ui.js';
-import { config } from './config.js';
+import { useServerStore } from './server-config.js';
 
 /**
  * Wires the API client, the realtime client and the stores together.
@@ -35,7 +35,7 @@ export function AppServicesProvider({ children }: { readonly children: ReactNode
   const api = useMemo(
     () =>
       createApiClient({
-        baseUrl: config.apiUrl,
+        getBaseUrl: () => useServerStore.getState().endpoints.apiUrl,
         getToken: () => useSessionStore.getState().token,
         onAuthFailure: () => {
           // One place handles a revoked session. Without this each caller
@@ -50,7 +50,7 @@ export function AppServicesProvider({ children }: { readonly children: ReactNode
 
   const [realtime] = useState<RealtimeClient>(() =>
     createRealtimeClient({
-      url: config.realtimeUrl,
+      getUrl: () => useServerStore.getState().endpoints.realtimeUrl,
       getToken: () => useSessionStore.getState().token,
       getChannelIds: () => currentChannelIds(),
 
