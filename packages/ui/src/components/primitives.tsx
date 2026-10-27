@@ -208,23 +208,35 @@ export function StatusDot({ state, className }: StatusDotProps) {
 }
 
 /**
- * Deterministic avatar colour from an id.
+ * Deterministic avatar shade from an id.
  *
- * Stable per user, so someone's placeholder does not change colour between
- * sessions, which would break the visual recognition that makes avatars
- * useful in the first place.
+ * Stable per user, so someone's placeholder does not change between sessions,
+ * which would break the visual recognition that makes avatars useful in the
+ * first place.
+ *
+ * Greyscale, so identity is carried by *lightness* rather than hue. Two
+ * consequences worth stating:
+ *
+ *   * The steps are spread across the full range rather than clustered, so
+ *     neighbouring shades stay distinguishable at 32px. Seven evenly spaced
+ *     mid-greys would all look like "grey circle".
+ *
+ *   * Each shade carries its own foreground, because a single text colour
+ *     cannot sit on both ends of that range. A fixed white initial would
+ *     vanish on the lightest shades -- which is exactly the bug that makes
+ *     monochrome avatars look broken rather than deliberate.
  */
 const avatarTints = [
-  'bg-[#5b6ef5]',
-  'bg-[#7c6cf5]',
-  'bg-[#c46cf5]',
-  'bg-[#f0616d]',
-  'bg-[#e8a33d]',
-  'bg-[#3ec98a]',
-  'bg-[#3dbfe8]',
+  { bg: 'bg-[#f2f3f5]', fg: 'text-[#1a1b1e]' },
+  { bg: 'bg-[#b5bac1]', fg: 'text-[#1a1b1e]' },
+  { bg: 'bg-[#80848e]', fg: 'text-[#17181b]' },
+  { bg: 'bg-[#5d6069]', fg: 'text-[#f2f3f5]' },
+  { bg: 'bg-[#4e5058]', fg: 'text-[#f2f3f5]' },
+  { bg: 'bg-[#3f4147]', fg: 'text-[#dbdee1]' },
+  { bg: 'bg-[#2f3136]', fg: 'text-[#dbdee1]' },
 ] as const;
 
-function tintFor(seed: string): string {
+function tintFor(seed: string): (typeof avatarTints)[number] {
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) | 0;
@@ -250,14 +262,17 @@ const avatarSizes = {
 
 export function Avatar({ name, seed, src, size = 'md', className }: AvatarProps) {
   const initial = name.trim().charAt(0).toUpperCase() || '?';
+  const tint = tintFor(seed ?? name);
 
   return (
     <span
       className={cn(
         'relative inline-flex shrink-0 items-center justify-center overflow-hidden',
-        'rounded-pill font-semibold text-white/90 select-none',
+        'rounded-pill font-semibold select-none',
         avatarSizes[size],
-        src === undefined && tintFor(seed ?? name),
+        // Both halves of the pair, or the initial can end up unreadable on
+        // the lightest shades.
+        src === undefined && `${tint.bg} ${tint.fg}`,
         className,
       )}
       aria-hidden
@@ -385,7 +400,7 @@ export function Badge({ tone = 'neutral', className, children, ...rest }: BadgeP
       className={cn(
         'inline-flex items-center rounded-pill px-1.5 py-0.5 text-2xs font-medium',
         tone === 'neutral' && 'bg-hover text-ink-muted',
-        tone === 'accent' && 'bg-accent-wash text-accent',
+        tone === 'accent' && 'bg-accent-wash text-ink',
         tone === 'danger' && 'bg-danger-wash text-danger',
         tone === 'warning' && 'bg-warning/15 text-warning',
         className,

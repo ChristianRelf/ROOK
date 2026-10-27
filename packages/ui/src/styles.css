@@ -4,10 +4,11 @@
  * Tailwind 4 is configured in CSS rather than a JS config file, so this is the
  * whole theme. Imported once by the desktop app.
  *
- * The palette follows the Discord convention, because this is a Discord-shaped
- * application and borrowing the vocabulary means the layout reads correctly on
- * first use. Decisions worth stating, because they are what keep a chat client
- * readable for hours:
+ * The layout follows the Discord convention, because this is a Discord-shaped
+ * application and borrowing the vocabulary means it reads correctly on first
+ * use. The *palette* does not: it is greyscale throughout, with no brand hue
+ * anywhere in the interface. Decisions worth stating, because they are what
+ * keep a chat client readable for hours:
  *
  *   * **Four surface levels, deepest at the edges.** The community rail is the
  *     darkest band, the channel sidebar sits one step above it, and the
@@ -20,10 +21,17 @@
  *     weight, and *unread* promotes them to full strength -- so "unread" is
  *     legible without adding a colour.
  *
- *   * **One accent (blurple), one alarm (red).** The accent marks where you
- *     are and what you will do next; red is reserved for mentions and
- *     destructive actions. A mention badge has to win against everything else
- *     on screen, and it only can if nothing else is competing for red.
+ *   * **The accent is a light grey, not a colour.** It marks where you are and
+ *     what you will do next, through lightness alone. In a greyscale interface
+ *     that works because nothing else competes for brightness: the brightest
+ *     thing on screen is either the primary action or the message you are
+ *     reading.
+ *
+ *   * **Colour is reserved for state, never for decoration or identity.** Red
+ *     means something is wrong or about to be destroyed; amber means something
+ *     is in progress. They are the only hues here, which is precisely what
+ *     makes them readable as warnings -- a palette where everything is
+ *     coloured has no way left to say "look at this one".
  */
 
 @import 'tailwindcss';
@@ -67,31 +75,55 @@
   --color-ink-faint: #6d6f78;
 
   /* --- Accent --------------------------------------------------------- */
-  --color-accent: #5865f2;
-  --color-accent-hover: #4752c4;
-  --color-accent-pressed: #3c45a5;
-  --color-accent-ink: #ffffff;
-  /* Tinted surface for the active community pill and selected rows. */
-  --color-accent-wash: #5865f229;
+  /*
+   * Greyscale, and light rather than dark.
+   *
+   * On a dark interface the strongest available accent is brightness, so the
+   * primary action is a light fill with dark text -- which is why
+   * `accent-ink` is near-black here rather than white. The same token reads
+   * correctly as *text* and as a *border* on any of the four surfaces, so a
+   * focus ring, a link and a tab underline all resolve to one value.
+   */
+  --color-accent: #dbdee1;
+  --color-accent-hover: #f2f3f5;
+  --color-accent-pressed: #b5bac1;
+  --color-accent-ink: #1a1b1e;
+  /* Tinted surface for a selected row. A white overlay, so it composes over
+     any surface rather than only the one it was sampled against. */
+  --color-accent-wash: #ffffff14;
 
   /* --- Status --------------------------------------------------------- */
-  /* Mentions and destructive actions. Reserved -- see the header note. */
+  /*
+   * The only hues in the theme, and each one means a state rather than a
+   * brand. Red for something wrong or about to be destroyed, amber for
+   * something in progress. `success` is deliberately greyscale: "it worked"
+   * does not need to interrupt anyone, and spending a third hue on it would
+   * weaken the two that do.
+   */
   --color-danger: #f23f43;
   --color-danger-hover: #d8373b;
   --color-danger-wash: #f23f4324;
   --color-warning: #f0b232;
-  --color-success: #23a559;
+  --color-success: #dbdee1;
 
-  /* Presence and connection dots. */
-  --color-online: #23a559;
-  --color-idle: #f0b232;
+  /* Presence and connection dots. Connecting borrows the amber, since it is
+     the one that wants noticing; the other two are neutral. */
+  --color-online: #dbdee1;
+  --color-idle: #80848e;
   --color-connecting: #f0b232;
-  --color-offline: #80848e;
+  --color-offline: #4e5058;
 
-  /* Role colours for the member list, so an owner and an admin are
-     distinguishable at a glance without reading a badge. */
-  --color-role-owner: #f0b232;
-  --color-role-admin: #5865f2;
+  /*
+   * Role weights for the member list.
+   *
+   * Three descending greys rather than three hues. The crown and shield icons
+   * already carry which role is which, so these only have to establish an
+   * order -- and lightness does that at a glance without asking anyone to
+   * learn what amber means.
+   */
+  --color-role-owner: #ffffff;
+  --color-role-admin: #dbdee1;
+  --color-role-member: #b5bac1;
 
   /* --- Typography ----------------------------------------------------- */
   /* System stack: a chat client should look native, and shipping a webfont
