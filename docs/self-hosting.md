@@ -40,7 +40,7 @@ on a public port, and the compose stack publishes nothing to the host at all.
 | Hostname             | Serves                                           |
 | -------------------- | ------------------------------------------------ |
 | `rook.relf.cc`       | The API, and the WebSocket gateway on `/ws`      |
-| `files.rook.relf.cc` | Object storage, for direct uploads and downloads |
+| `rook-files.relf.cc` | Object storage, for direct uploads and downloads |
 
 Storage needs its own hostname rather than a path prefix. Presigned URLs are
 signed over the exact host **and path** the client requests, so putting storage
@@ -49,6 +49,27 @@ rewrote the path. Two hostnames avoids the problem entirely.
 
 The API and the gateway do share one hostname, because Caddy routes `/ws` to
 the gateway without rewriting anything.
+
+### Why `rook-files` and not `files.rook`
+
+Both hostnames are deliberately **first-level** subdomains of the zone --
+siblings, not parent and child.
+
+Cloudflare's free Universal SSL certificate covers the apex and `*.zone`: one
+level of wildcard. `files.rook.relf.cc` is a second-level subdomain, so
+`*.relf.cc` does not match it. DNS resolves, the tunnel routes, and then TLS
+fails at the edge with `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` -- which reads like
+a cipher negotiation problem and is actually a missing certificate.
+
+Covering a deeper name needs
+[Advanced Certificate Manager](https://developers.cloudflare.com/ssl/edge-certificates/advanced-certificate-manager/),
+a paid add-on. Keeping both names first-level costs nothing instead.
+
+The usual workaround of setting the record to DNS-only does not apply here,
+because tunnel hostnames have to be proxied.
+
+So: `rook-files.relf.cc`, not `files.rook.relf.cc`. `pnpm server:init` derives
+it this way, turning `<name>.<zone>` into `<name>-files.<zone>`.
 
 ---
 
@@ -66,7 +87,7 @@ Then add two **public hostnames** to the tunnel:
 | Subdomain    | Domain    | Type   | URL            |
 | ------------ | --------- | ------ | -------------- |
 | `rook`       | `relf.cc` | `HTTP` | `caddy:80`     |
-| `files.rook` | `relf.cc` | `HTTP` | `storage:8333` |
+| `rook-files` | `relf.cc` | `HTTP` | `storage:8333` |
 
 `HTTP`, not HTTPS: Cloudflare terminates TLS at the edge and forwards plain
 HTTP into the tunnel, so the services need no certificates.
@@ -78,7 +99,7 @@ DNS records are created for you.
 
 ### Settings worth changing
 
-On the `files.rook` hostname, under **Additional application settings → HTTP
+On the `rook-files` hostname, under **Additional application settings → HTTP
 settings**, leave _Disable Chunked Encoding_ off. Uploads are a single PUT, so
 chunking is not involved.
 
@@ -99,10 +120,37 @@ In the Cloudflare dashboard for the zone, consider:
 git clone <repository-url> rook
 cd rook
 
+pnpm server:init --token=<the token from step 1>
+```
+
+`.env.server` is git-ignored, so a fresh clone never has one. `server:init`
+writes it from `.env.server.example` with every secret generated:
+`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `SESSION_TOKEN_PEPPER`,
+`S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
+
+It refuses to overwrite an existing `.env.server`, because regenerating the
+secrets would orphan the volumes that were initialised with the old ones.
+
+For a hostname other than `rook.relf.cc`:
+
+```bash
+pnpm server:init --hostname=chat.example.com
+```
+
+That sets `PUBLIC_HOSTNAME`, `PUBLIC_FILES_HOSTNAME`, `API_PUBLIC_URL`,
+`REALTIME_PUBLIC_URL` and `S3_PUBLIC_ENDPOINT` together. The files hostname
+defaults to `files.<hostname>`; override it with `--files-hostname=`.
+
+Omit `--token` and the file is written with a placeholder for you to fill in.
+That is the only value the script cannot generate.
+
+### Doing it by hand instead
+
+```bash
 cp .env.server.example .env.server
 ```
 
-Edit `.env.server`. Generate each secret rather than inventing one:
+Then generate each secret rather than inventing one:
 
 ```bash
 openssl rand -base64 32    # POSTGRES_PASSWORD
@@ -112,26 +160,14 @@ openssl rand -hex 16       # S3_ACCESS_KEY_ID
 openssl rand -hex 32       # S3_SECRET_ACCESS_KEY
 ```
 
-Then set, consistently:
-
-```ini
-CLOUDFLARE_TUNNEL_TOKEN=<the token from step 1>
-
-PUBLIC_HOSTNAME=rook.relf.cc
-PUBLIC_FILES_HOSTNAME=files.rook.relf.cc
-
-API_PUBLIC_URL=https://rook.relf.cc
-REALTIME_PUBLIC_URL=wss://rook.relf.cc
-S3_PUBLIC_ENDPOINT=https://files.rook.relf.cc
-```
-
-Two things that catch people out:
+Two things that catch people out, and the reason the script exists:
 
 - **`DATABASE_URL` and `REDIS_URL` embed their passwords.** Update the URL as
   well as the `POSTGRES_PASSWORD` / `REDIS_PASSWORD` variable, or the services
   authenticate with a different value than the server was created with.
 - **Avoid `: / @ ? #` in the Redis password.** It goes into a URL, and those
-  characters change how it parses.
+  characters change how it parses. (`server:init` uses base64url, which
+  contains none of them.)
 
 `.env.server` is git-ignored. Keep it that way.
 
@@ -327,12 +363,13 @@ open-registration concern entirely.
 
 ## Troubleshooting
 
-| Symptom                                               | Cause                                                                                                                                                     |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cloudflared` restarting, exit 255                    | The tunnel token is wrong or still the placeholder. Check `logs cloudflared`.                                                                             |
-| `curl https://rook.relf.cc/` returns a Cloudflare 502 | The tunnel is connected but the hostname points at the wrong service. It must be `caddy:80`, not `api:4000`.                                              |
-| Sign-in works, messages never arrive live             | The WebSocket is not upgrading. Confirm **Network → WebSockets** is on for the zone, and that the client's server URL uses `https` (so it derives `wss`). |
-| Uploads fail at the PUT step                          | `files.rook` hostname missing from the tunnel, or `S3_PUBLIC_ENDPOINT` not matching it.                                                                   |
-| Uploads confirm but images never appear               | `media-worker` is not running, or failing. Check `logs media-worker`.                                                                                     |
-| `migrate` exits 1 on first run                        | Usually `DATABASE_URL` disagreeing with `POSTGRES_PASSWORD`.                                                                                              |
-| Services restart in a loop at start-up                | Run `logs api`. Configuration errors are reported in full, naming each bad variable.                                                                      |
+| Symptom                                                | Cause                                                                                                                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloudflared` restarting, exit 255                     | The tunnel token is wrong or still the placeholder. Check `logs cloudflared`.                                                                             |
+| `curl https://rook.relf.cc/` returns a Cloudflare 502  | The tunnel is connected but the hostname points at the wrong service. It must be `caddy:80`, not `api:4000`.                                              |
+| Sign-in works, messages never arrive live              | The WebSocket is not upgrading. Confirm **Network → WebSockets** is on for the zone, and that the client's server URL uses `https` (so it derives `wss`). |
+| Uploads fail at the PUT step                           | `rook-files` hostname missing from the tunnel, or `S3_PUBLIC_ENDPOINT` not matching it.                                                                   |
+| Uploads fail with `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` | No edge certificate for the storage hostname. It must be a first-level subdomain; free Universal SSL does not cover `files.rook.relf.cc`.                 |
+| Uploads confirm but images never appear                | `media-worker` is not running, or failing. Check `logs media-worker`.                                                                                     |
+| `migrate` exits 1 on first run                         | Usually `DATABASE_URL` disagreeing with `POSTGRES_PASSWORD`.                                                                                              |
+| Services restart in a loop at start-up                 | Run `logs api`. Configuration errors are reported in full, naming each bad variable.                                                                      |

@@ -151,7 +151,7 @@ check('upload authorised', 201, upload.status);
 check(
   'presigned url uses the public storage hostname',
   true,
-  String(upload.body.uploadUrl).startsWith('https://files.rook.relf.cc'),
+  String(upload.body.uploadUrl).startsWith('https://rook-files.relf.cc'),
 );
 
 console.log('== outbox drained ==');

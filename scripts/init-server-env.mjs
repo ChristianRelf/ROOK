@@ -37,8 +37,31 @@ function flag(name) {
 
 const force = process.argv.includes('--force');
 const hostname = flag('hostname');
-const filesHostname = flag('files-hostname') ?? (hostname ? `files.${hostname}` : undefined);
 const token = flag('token');
+
+/**
+ * Derives the storage hostname as a sibling of the API hostname, not a child
+ * of it.
+ *
+ * This matters for cost rather than correctness. Cloudflare's free Universal
+ * SSL certificate covers the zone apex and `*.zone` -- one level of wildcard.
+ * A deeper name like `files.rook.relf.cc` resolves and tunnels fine but has no
+ * matching certificate at the edge, so every upload fails TLS with
+ * ERR_SSL_VERSION_OR_CIPHER_MISMATCH, which reads like a cipher problem and is
+ * not. Covering it needs Advanced Certificate Manager, a paid add-on.
+ *
+ * So `rook.relf.cc` gives `rook-files.relf.cc`, which `*.relf.cc` covers.
+ *
+ * Two labels are already at the apex, where `files.` is itself first-level.
+ */
+function deriveFilesHostname(host) {
+  const labels = host.split('.');
+  if (labels.length <= 2) return `files.${host}`;
+  return `${labels[0]}-files.${labels.slice(1).join('.')}`;
+}
+
+const filesHostname =
+  flag('files-hostname') ?? (hostname === undefined ? undefined : deriveFilesHostname(hostname));
 
 function fail(message) {
   console.error(`\u001b[31merror\u001b[0m ${message}`);
@@ -114,25 +137,38 @@ if (output.includes('CHANGE_ME')) {
     .filter((line) => line.includes('CHANGE_ME') && /^[A-Z0-9_]+=/.test(line))
     .map((line) => line.split('=')[0]);
   if (remaining.length > 0) {
-    fail(`These still need generating -- the script does not know about them: ${remaining.join(', ')}`);
+    fail(
+      `These still need generating -- the script does not know about them: ${remaining.join(', ')}`,
+    );
   }
 }
 
+// Owner-only, which Windows ignores -- so the message below does not claim it
+// there rather than stating something untrue about the file just written.
 writeFileSync(target, output, { encoding: 'utf8', mode: 0o600 });
 
 const green = (text) => `\u001b[32m${text}\u001b[0m`;
 const dim = (text) => `\u001b[2m${text}\u001b[0m`;
 
-console.log(`${green('created')} .env.server ${dim('(git-ignored, mode 600)')}`);
-console.log(`${dim('        generated:')} POSTGRES_PASSWORD, REDIS_PASSWORD, SESSION_TOKEN_PEPPER,`);
+const note = process.platform === 'win32' ? '(git-ignored)' : '(git-ignored, mode 600)';
+console.log(`${green('created')} .env.server ${dim(note)}`);
+console.log(
+  `${dim('        generated:')} POSTGRES_PASSWORD, REDIS_PASSWORD, SESSION_TOKEN_PEPPER,`,
+);
 console.log(`${dim('                  ')} S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY`);
 if (hostname !== undefined) {
   console.log(`${dim('        hostnames:')} ${hostname}, ${filesHostname}`);
+  // Not public-suffix aware, so the derivation is a good guess rather than a
+  // guarantee. Saying which constraint matters lets the value be checked.
+  console.log(`${dim('                  ')} both must be first-level subdomains of your zone, or`);
+  console.log(`${dim('                  ')} Cloudflare's free Universal SSL will not cover them`);
 }
 console.log('');
 if (token === undefined) {
   console.log('Next:');
-  console.log(`  1. Set CLOUDFLARE_TUNNEL_TOKEN in .env.server ${dim('(currently a placeholder)')}`);
+  console.log(
+    `  1. Set CLOUDFLARE_TUNNEL_TOKEN in .env.server ${dim('(currently a placeholder)')}`,
+  );
   console.log('  2. pnpm server:up');
 } else {
   console.log(`Next: ${green('pnpm server:up')}`);

@@ -140,6 +140,7 @@ pnpm build               # compiles every package, app and the frontend
 pnpm --filter @rook/desktop tauri:build   # packaged desktop binary
 
 # Self-hosted server (Docker, behind a Cloudflare tunnel)
+pnpm server:init         # write .env.server with generated secrets
 pnpm server:up           # build and start the whole backend
 pnpm server:ps           # status of every container
 pnpm server:logs         # follow all logs
