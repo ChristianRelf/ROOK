@@ -116,6 +116,25 @@ In the Cloudflare dashboard for the zone, consider:
 
 ## 2. Configure the server
 
+On a fresh Linux server, one command does all of step 2 and step 3:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ChristianRelf/ROOK/main/scripts/bootstrap-server.sh | bash
+```
+
+It checks the prerequisites, clones the repository to `~/rook`, writes
+`.env.server` with generated secrets, then builds and starts the stack. It is
+safe to re-run: an existing checkout is fast-forwarded, and an existing
+`.env.server` is never rewritten. If the tunnel token is not set yet it stops
+and says so rather than starting something unreachable.
+
+`ROOK_DIR`, `ROOK_HOSTNAME` and `ROOK_REPO_URL` override the defaults.
+
+Node is not needed on the server -- the one script that requires it runs in
+the same image the services are built from.
+
+### Or step by step
+
 ```bash
 git clone <repository-url> rook
 cd rook
