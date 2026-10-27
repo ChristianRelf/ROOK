@@ -1,0 +1,20 @@
+{
+  // Solution-style root config: holds no files of its own, just the build
+  // graph. `tsc -b` from here builds and type-checks everything in order.
+  "files": [],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/observability" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/database" },
+    { "path": "./packages/auth" },
+    { "path": "./packages/messaging" },
+    { "path": "./packages/queue" },
+    { "path": "./packages/media" },
+    { "path": "./packages/ui" },
+    { "path": "./apps/api" },
+    { "path": "./apps/realtime" },
+    { "path": "./apps/desktop" },
+    { "path": "./services/media-worker" }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    /* Strictness. docs/architecture.md#typescript-configuration explains the
+       one strict option we deliberately leave off. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+
+    /* Emit. Workspace packages are composite projects so a single `tsc -b`
+       builds and type-checks the whole graph in dependency order. */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+
+    /* Ambient types are declared explicitly rather than auto-discovered.
+       Under pnpm, auto-discovery depends on which @types happen to be
+       reachable, so a package can compile only because an unrelated
+       dependency pulled in a reference. The desktop app overrides this. */
+    "types": ["node"]
+  },
+  "exclude": ["node_modules", "dist"]
+}

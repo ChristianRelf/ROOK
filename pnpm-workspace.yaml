@@ -1,0 +1,10 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'services/*'
+
+# Native/binary-bearing dependencies that are allowed to run install scripts.
+onlyBuiltDependencies:
+  - '@node-rs/argon2'
+  - esbuild
+  - sharp

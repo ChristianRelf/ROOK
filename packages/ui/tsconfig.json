@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    /* Browser-only: no Node globals, and React's types come from the
+       dependency rather than from ambient type discovery. */
+    "types": [],
+    "rootDir": "src",
+    /* Vite compiles this package's source directly (its `exports` point at
+       src), so the emitted JavaScript is never used. Declarations still have
+       to be emitted because the project is composite -- they go to a cache
+       directory rather than a published `dist`. */
+    "outDir": "./node_modules/.cache/types",
+    "tsBuildInfoFile": "./node_modules/.cache/types/.tsbuildinfo"
+  },
+  "include": ["src/**/*"]
+}

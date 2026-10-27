@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    /* Not part of the build graph: these suites are run by Vitest, never
+       emitted. Non-composite so they can be type-checked without joining the
+       project-reference chain. */
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"],
+    /* Fixtures legitimately reach into shapes the production code keeps
+       narrow, so these two are relaxed here and nowhere else. */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["**/*.ts"]
+}

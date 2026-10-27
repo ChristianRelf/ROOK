@@ -1,0 +1,37 @@
+[package]
+name = "rook-desktop"
+version = "0.1.0"
+description = "Rook desktop client"
+authors = ["Rook contributors"]
+edition = "2021"
+rust-version = "1.77"
+
+# The library target is what Tauri's mobile tooling expects, and keeping the
+# logic there means `main.rs` stays a thin entry point.
+[lib]
+name = "rook_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-store = "2.5.0"
+tauri-plugin-opener = "2.7.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[features]
+# Enabled by the Tauri CLI for production builds; keeps devtools out of a
+# shipped binary.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+# A desktop client benefits more from a smaller binary than from the last few
+# percent of speed: the heavy work happens on the server.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

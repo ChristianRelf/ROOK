@@ -1,0 +1,12 @@
+/*
+ * The desktop app's stylesheet.
+ *
+ * All tokens and base styles live in @rook/ui so a future web client inherits
+ * exactly the same design system. This file only adds what is specific to
+ * running inside a desktop window.
+ */
+
+@import '@rook/ui/styles.css';
+
+/* Tailwind must also scan this app's sources, not just the UI package's. */
+@source './**/*.{ts,tsx}';

@@ -1,0 +1,231 @@
+/*
+ * Rook design tokens.
+ *
+ * Tailwind 4 is configured in CSS rather than a JS config file, so this is the
+ * whole theme. Imported once by the desktop app.
+ *
+ * The palette is a cool neutral grey with a single violet accent. Decisions
+ * worth stating, because they are what keep a chat client readable for hours:
+ *
+ *   * **Three surface levels, not a gradient.** `base` (chrome), `raised`
+ *     (panels), `overlay` (dialogs). Depth comes from a 1px border and a
+ *     small step in lightness, not from shadows or blurs.
+ *
+ *   * **Text has exactly four weights of emphasis.** Anything more and
+ *     hierarchy stops reading as hierarchy.
+ *
+ *   * **Borders are nearly invisible by design** (about 8% contrast against
+ *     their surface). They separate regions without drawing the eye, which is
+ *     what lets the message content be the only thing with real contrast.
+ *
+ *   * **One accent colour**, used for the active channel, focus rings and the
+ *     primary button. Reserving it means it always means "this is where you
+ *     are or what you'll do next".
+ */
+
+@import 'tailwindcss';
+
+/* Tailwind scans for class names at build time. The UI package lives outside
+   the app directory, so its sources have to be named explicitly or every
+   class used only in a shared component would be stripped from the bundle. */
+@source '../../ui/src/**/*.{ts,tsx}';
+
+@theme {
+  /* --- Surfaces ------------------------------------------------------- */
+  --color-base: #0f1013;
+  --color-raised: #16181d;
+  --color-overlay: #1c1f26;
+  --color-inset: #0a0b0d;
+
+  /* Hover and pressed states, as overlays rather than separate colours. */
+  --color-hover: #ffffff0a;
+  --color-active: #ffffff14;
+
+  /* --- Borders -------------------------------------------------------- */
+  --color-line: #ffffff14;
+  --color-line-strong: #ffffff24;
+
+  /* --- Text ----------------------------------------------------------- */
+  --color-ink: #edeef1;
+  --color-ink-muted: #a2a6b0;
+  --color-ink-subtle: #70747e;
+  --color-ink-faint: #4b4e57;
+
+  /* --- Accent --------------------------------------------------------- */
+  --color-accent: #7c6cf5;
+  --color-accent-hover: #8b7cf7;
+  --color-accent-pressed: #6a58f0;
+  --color-accent-ink: #ffffff;
+  /* Tinted surface for the selected row. */
+  --color-accent-wash: #7c6cf51f;
+
+  /* --- Status --------------------------------------------------------- */
+  --color-danger: #f0616d;
+  --color-danger-wash: #f0616d1f;
+  --color-warning: #e8a33d;
+  --color-success: #3ec98a;
+
+  /* Presence and connection dots. */
+  --color-online: #3ec98a;
+  --color-connecting: #e8a33d;
+  --color-offline: #70747e;
+
+  /* --- Typography ----------------------------------------------------- */
+  /* System stack: a chat client should look native, and shipping a webfont
+     costs a flash of unstyled text on every launch for no benefit here. */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* --- Radii ---------------------------------------------------------- */
+  --radius-control: 0.375rem;
+  --radius-panel: 0.5rem;
+  --radius-pill: 9999px;
+
+  /* --- Motion --------------------------------------------------------- */
+  /* Short and few. Animation here is for confirming a state change, never
+     for decoration: a list that animates on every message becomes tiring to
+     read within minutes. */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+}
+
+/* --- Base ------------------------------------------------------------- */
+
+@layer base {
+  * {
+    /* Borders default to transparent so a utility like `border` does not
+       silently paint a browser-default colour. */
+    border-color: var(--color-line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-base);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* This is a desktop application window, not a document: the page itself
+       must never scroll or rubber-band. Panes scroll individually. */
+    overflow: hidden;
+    /* Selecting the chrome is never useful and makes drags feel broken.
+       Message content re-enables it below. */
+    user-select: none;
+  }
+
+  /* Content people need to copy. */
+  .selectable,
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  /* One focus style everywhere, visible only for keyboard navigation. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Scrollbars: present but quiet. A chat client has several scroll regions,
+     and loud scrollbars make the layout look busier than it is. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
+    border-radius: var(--radius-pill);
+    /* Inset the thumb so it does not touch the pane edge. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #ffffff38;
+  }
+
+  /* Respect the OS setting. Animation here is confirmation, so removing it
+     costs nothing functional. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* A subtle entrance for newly arrived messages. Deliberately 120ms and
+     2px: enough to notice something arrived, not enough to track. */
+  @keyframes rook-rise {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-rise {
+    animation: rook-rise var(--duration-fast) var(--ease-out-soft);
+  }
+
+  @keyframes rook-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+
+  .animate-soft-pulse {
+    animation: rook-pulse 1.6s ease-in-out infinite;
+  }
+
+  /* Drag region for the custom title bar. */
+  .drag-region {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+}

@@ -1,0 +1,131 @@
+# Local development infrastructure for Rook.
+#
+# Nothing here is production configuration: credentials are weak on purpose and
+# all ports are published to localhost so the desktop app and the Node services
+# can reach them without container networking.
+#
+#   pnpm infra:up      start everything
+#   pnpm infra:reset   wipe all volumes and start clean
+#
+# Image tags are pinned. See docs/adr/0002-localstack-over-minio.md for why
+# object storage is LocalStack rather than MinIO.
+
+name: rook
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: rook-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rook_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rook}
+      # Deterministic collation so index ordering matches across machines.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # PostgreSQL 18+ expects the mount here, not at ./data: PGDATA is a
+      # version-specific subdirectory, which is what makes an in-place
+      # `pg_upgrade --link` possible later.
+      - postgres-data:/var/lib/postgresql
+    command:
+      # Modest tuning that keeps local development responsive without
+      # pretending to be a production configuration.
+      - 'postgres'
+      - '-c'
+      - 'max_connections=200'
+      - '-c'
+      - 'shared_buffers=256MB'
+      - '-c'
+      - 'log_min_duration_statement=500'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-rook} -d ${POSTGRES_DB:-rook}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:8.8.4-alpine
+    container_name: rook-redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    command:
+      # appendonly keeps BullMQ job state across restarts during development.
+      - 'redis-server'
+      - '--appendonly'
+      - 'yes'
+      - '--maxmemory-policy'
+      - 'noeviction'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # S3-compatible object storage for media uploads.
+  #
+  # SeaweedFS rather than MinIO or LocalStack: both of those now gate their
+  # images (MinIO requires registry authentication, LocalStack requires a paid
+  # auth token), which breaks "clone it and run it with no cloud account".
+  # SeaweedFS is Apache-2.0 and pulls anonymously.
+  # See docs/adr/0002-object-storage-choice.md.
+  storage:
+    image: chrislusf/seaweedfs:4.51
+    container_name: rook-storage
+    restart: unless-stopped
+    command:
+      - 'server'
+      - '-dir=/data'
+      - '-ip=0.0.0.0'
+      # Small volumes keep the local data directory manageable.
+      - '-master.volumeSizeLimitMB=256'
+      - '-s3'
+      - '-s3.port=8333'
+      - '-s3.config=/etc/seaweedfs/s3.json'
+      # The desktop client PUTs directly to a presigned URL, so the storage
+      # endpoint must accept its origin. Not '*': an over-broad value here
+      # would let any page in a browser read from this endpoint.
+      - '-s3.allowedOrigins=http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost'
+    ports:
+      - '${S3_PORT:-8333}:8333'
+    volumes:
+      - storage-data:/data
+      - ./infrastructure/docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test:
+        - 'CMD-SHELL'
+        # 403 is expected and healthy: anonymous access is denied because
+        # s3.json declares an identity. Any HTTP reply proves S3 is up.
+        - 'curl -s -o /dev/null -w "%{http_code}" http://localhost:8333/ | grep -qE "^(200|403)$"'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  # Creates the media bucket, then exits. Runs on every `up`, which is safe
+  # because bucket creation is idempotent.
+  storage-init:
+    image: chrislusf/seaweedfs:4.51
+    container_name: rook-storage-init
+    restart: 'no'
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -e
+        echo "[rook] ensuring bucket ${S3_BUCKET_MEDIA:-rook-media} exists"
+        echo "s3.bucket.create -name ${S3_BUCKET_MEDIA:-rook-media}" | weed shell -master=storage:9333
+        echo "s3.bucket.list" | weed shell -master=storage:9333
+
+volumes:
+  postgres-data:
+  redis-data:
+  storage-data:

@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "SeaweedFS S3 identities for local development.",
+    "Declaring an identity disables anonymous access, so the bucket is private",
+    "and every request must be signed — which is what makes the presigned-URL",
+    "flow behave like real S3 rather than silently accepting anything.",
+    "These credentials are development-only and match .env.example."
+  ],
+  "identities": [
+    {
+      "name": "rook-dev",
+      "credentials": [
+        {
+          "accessKey": "rook-local-access-key",
+          "secretKey": "rook-local-secret-key"
+        }
+      ],
+      "actions": ["Read", "Write", "List", "Tagging", "Admin"]
+    }
+  ]
+}

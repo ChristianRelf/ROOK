@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    /* Browser-only: no Node globals. Vite's client types provide import.meta.env. */
+    "types": ["vite/client"],
+    "rootDir": "src",
+    /* Vite produces the bundle; tsc only type-checks. Declarations still have
+       to be emitted because the project is composite, so they go to a cache
+       directory rather than into the shipped output. */
+    "outDir": "./node_modules/.cache/types",
+    "tsBuildInfoFile": "./node_modules/.cache/types/.tsbuildinfo",
+    /* Vite resolves bare specifiers like a bundler, not like Node, so
+       extensionless imports of .tsx files must resolve here too. */
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "allowImportingTsExtensions": false,
+    "noEmit": false
+  },
+  "include": ["src/**/*"],
+  "references": [{ "path": "../../packages/contracts" }, { "path": "../../packages/ui" }]
+}

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      A strict Content-Security-Policy for the webview.
+
+      `connect-src` is deliberately broad for http/https/ws/wss because the API
+      and storage endpoints are configured at runtime, so they cannot be
+      enumerated here. Everything that executes is locked down instead:
+      no inline scripts, no eval, no plugins, no framing.
+
+      `img-src` includes blob: for local previews of a file the user just
+      picked, before it has been uploaded.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self';
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data: blob: http: https:;
+               font-src 'self';
+               connect-src 'self' http: https: ws: wss:;
+               media-src 'self' blob:;
+               object-src 'none';
+               base-uri 'none';
+               form-action 'none';
+               frame-ancestors 'none'"
+    />
+    <title>Rook</title>
+  </head>
+  <body class="h-full">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

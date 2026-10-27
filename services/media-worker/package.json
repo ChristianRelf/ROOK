@@ -1,0 +1,28 @@
+{
+  "name": "@rook/media-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "dev": "tsx watch --conditions development src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@rook/config": "workspace:*",
+    "@rook/contracts": "workspace:*",
+    "@rook/database": "workspace:*",
+    "@rook/media": "workspace:*",
+    "@rook/messaging": "workspace:*",
+    "@rook/observability": "workspace:*",
+    "@rook/queue": "workspace:*",
+    "ioredis": "6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "tsx": "4.23.15",
+    "vitest": "5.0.5"
+  }
+}
