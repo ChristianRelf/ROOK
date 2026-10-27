@@ -192,7 +192,10 @@ export function Menu({ trigger, items, align = 'right', className, label }: Menu
                     ? 'cursor-not-allowed text-ink-faint'
                     : item.destructive === true
                       ? 'text-danger hover:bg-danger hover:text-white'
-                      : 'text-ink-muted hover:bg-accent hover:text-accent-ink',
+                      : // Not the accent fill: a light row with dark text
+                        // would invert on hover, which in a greyscale interface
+                        // reads as the item being selected rather than hovered.
+                        'text-ink-muted hover:bg-active hover:text-ink',
                 )}
               >
                 {item.icon !== undefined ? (

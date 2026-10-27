@@ -124,8 +124,10 @@ export function CommunityRail({
             aria-label="Create a community"
             className={cn(
               'flex size-12 items-center justify-center rounded-panel bg-raised',
-              'text-success transition-all duration-(--duration-fast)',
-              'hover:rounded-control hover:bg-success hover:text-white',
+              'text-ink-muted transition-all duration-(--duration-fast)',
+              // Brightening to the accent on hover, which is the only
+              // emphasis available without introducing a hue.
+              'hover:rounded-control hover:bg-accent hover:text-accent-ink',
             )}
           >
             <Plus className="size-5" />

@@ -58,8 +58,16 @@
      they compose correctly over any of the four surfaces. */
   --color-hover: #ffffff0f;
   --color-active: #ffffff1a;
-  /* The resting background of a selected channel row. */
-  --color-selected: #ffffff14;
+  /*
+   * The resting background of a selected channel row.
+   *
+   * Stronger than both hover and pressed on purpose. With no accent hue to
+   * mark the selection, the fill has to be the thing that distinguishes "this
+   * is the channel you are in" from "your cursor is over this" -- and a
+   * selected row that is lighter than a hovered one inverts that reading the
+   * moment the cursor moves.
+   */
+  --color-selected: #ffffff21;
 
   /* --- Borders -------------------------------------------------------- */
   /* Deliberately near-invisible: the surface steps already separate the panes,

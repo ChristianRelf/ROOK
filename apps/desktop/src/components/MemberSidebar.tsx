@@ -234,14 +234,16 @@ function MemberRow({
           <span
             className={cn(
               'min-w-0 truncate text-[15px] font-medium',
-              // Role colour on the name, which is where the eye already is —
+              // Role weight on the name, which is where the eye already is —
               // a separate badge per row would make the list busier than the
-              // information justifies.
+              // information justifies. Three descending greys, brightest for
+              // the owner, so the list establishes an order without asking
+              // anyone to learn what a colour means.
               member.role === 'owner'
                 ? 'text-role-owner'
                 : member.role === 'admin'
                   ? 'text-role-admin'
-                  : 'text-ink-muted',
+                  : 'text-role-member',
             )}
           >
             {member.user.displayName}
@@ -256,6 +258,7 @@ function MemberRow({
               'size-3.5 shrink-0',
               member.role === 'owner' ? 'text-role-owner' : 'text-role-admin',
             )}
+            strokeWidth={2.25}
           />
         ) : null}
       </div>

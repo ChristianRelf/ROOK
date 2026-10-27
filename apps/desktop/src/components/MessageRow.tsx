@@ -20,7 +20,7 @@ import { useMentionsMe } from '../lib/mentions.js';
  * get wrong because nothing is ever interpreted. `MessageContent` splits it
  * into mention and text segments, each still rendered as a text child.
  *
- * A message that mentions the reader gets a left bar and a tinted background,
+ * A message that mentions the reader gets a light left bar and a faint wash,
  * so it is findable while scrolling past without having to read every line.
  */
 
@@ -100,7 +100,7 @@ export function MessageRow({
         grouped ? 'py-0.5' : 'mt-3 py-1',
         // The bar is an inset shadow rather than a border so it does not add
         // to the row's width and shift the text by 2px when it appears.
-        mentionsMe && 'bg-warning/[0.06] shadow-[inset_2px_0_0_0_var(--color-warning)]',
+        mentionsMe && 'bg-white/[0.04] shadow-[inset_2px_0_0_0_var(--color-ink)]',
       )}
     >
       <div className="flex gap-3">

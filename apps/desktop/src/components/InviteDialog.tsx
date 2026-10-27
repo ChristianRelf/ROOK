@@ -280,7 +280,7 @@ export function InviteDialog({
                       className="flex size-7 shrink-0 items-center justify-center rounded-control text-ink-subtle hover:bg-active hover:text-ink"
                     >
                       {copiedCode === invite.code ? (
-                        <Check className="size-3.5 text-success" />
+                        <Check className="size-3.5 text-ink" />
                       ) : (
                         <Copy className="size-3.5" />
                       )}

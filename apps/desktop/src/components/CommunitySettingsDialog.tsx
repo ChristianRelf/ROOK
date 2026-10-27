@@ -439,7 +439,9 @@ function InvitesTab({ communityId }: { readonly communityId: CommunityId }) {
             <span
               className={cn(
                 'shrink-0 rounded-pill px-2 py-0.5 text-2xs font-medium',
-                invite.active ? 'bg-success/15 text-success' : 'bg-hover text-ink-faint',
+                // Weight, not hue: an active invite reads as the brighter
+                // of the two, which is enough next to the word itself.
+                invite.active ? 'bg-ink/15 text-ink' : 'bg-hover text-ink-faint',
               )}
             >
               {invite.active ? 'Active' : invite.revokedAt !== null ? 'Revoked' : 'Expired'}

@@ -16,9 +16,11 @@ import { useSessionStore } from '../stores/session.js';
  * React escapes it, so a message containing markup is displayed literally and
  * there is no sanitiser to get wrong — nothing is ever interpreted.
  *
- * A mention of *you* is rendered differently from a mention of someone else.
- * Without that distinction a busy channel is a wall of identical blue chips
- * and the one that matters is no easier to find than the rest.
+ * A mention of *you* is rendered differently from a mention of someone else,
+ * and the difference is brightness rather than colour: yours is a light chip,
+ * everyone else's is barely tinted. Without the distinction a busy channel is
+ * a wall of identical chips and the one that matters is no easier to find than
+ * the rest.
  */
 export function MessageContent({
   content,
@@ -54,8 +56,8 @@ export function MessageContent({
             className={cn(
               'rounded px-0.5 font-medium',
               mentionsMe
-                ? 'bg-accent/30 text-ink'
-                : 'bg-accent-wash text-accent hover:bg-accent/25',
+                ? 'bg-ink/25 text-ink'
+                : 'bg-white/[0.07] text-ink-muted hover:bg-white/[0.12]',
             )}
           >
             {segment.text}
