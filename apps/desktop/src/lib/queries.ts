@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { limits, type ChannelId, type CommunityId, type MessageId } from '@rook/contracts';
+import {
+  limits,
+  type CategoryId,
+  type ChannelId,
+  type CommunityId,
+  type MessageId,
+} from '@rook/contracts';
 import { ApiRequestError } from './api-client.js';
 import { useServices } from './services-context.js';
 import { useMessagesStore } from '../stores/messages.js';
@@ -249,15 +255,42 @@ export function useCreateCommunity() {
   });
 }
 
+/**
+ * Joining by either a permanent join code or an invite code.
+ *
+ * One mutation for both, because to the person pasting something they are the
+ * same action. The two code formats are distinguishable by shape — a join code
+ * is `word-word-1234`, an invite code is base64url — but matching on shape
+ * would misroute anything slightly unexpected and report the wrong error.
+ *
+ * So it tries the join code first and falls back to the invite endpoint when
+ * the server says the code is not a join code. The fallback only runs for that
+ * one error: a network failure or a rate limit is reported as itself rather
+ * than being retried against a second endpoint.
+ *
+ * The invite error is the one surfaced on a double miss, since it is the more
+ * specific of the two — "that invite link has expired" is more useful than
+ * "that code does not match any community".
+ */
 export function useJoinCommunity() {
   const { api } = useServices();
   const queryClient = useQueryClient();
   const selectCommunity = useUiStore((state) => state.selectCommunity);
 
   return useMutation({
-    mutationFn: (joinCode: string) => api.joinCommunity({ joinCode }),
+    mutationFn: async (code: string) => {
+      try {
+        return await api.joinCommunity({ joinCode: code });
+      } catch (error) {
+        if (!(error instanceof ApiRequestError) || error.code !== 'invalid_join_code') {
+          throw error;
+        }
+        return api.acceptInvite(code);
+      }
+    },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.communities });
+      await queryClient.invalidateQueries({ queryKey: ['unread'] });
       selectCommunity(result.community.id);
     },
   });
@@ -269,14 +302,28 @@ export function useCreateChannel(communityId: CommunityId | undefined) {
   const selectChannel = useUiStore((state) => state.selectChannel);
 
   return useMutation({
-    mutationFn: ({ name, topic }: { name: string; topic?: string }) =>
+    mutationFn: ({
+      name,
+      topic,
+      categoryId,
+    }: {
+      name: string;
+      topic?: string;
+      categoryId?: CategoryId;
+    }) =>
       api.createChannel(communityId as CommunityId, {
         name,
         ...(topic !== undefined && topic.length > 0 ? { topic } : {}),
+        ...(categoryId !== undefined ? { categoryId } : {}),
       }),
     onSuccess: async (result) => {
       if (communityId !== undefined) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.channels(communityId) });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.channels(communityId) }),
+          // The sidebar reads the tree, not the flat channel list, so this is
+          // the invalidation that actually makes the new channel appear.
+          queryClient.invalidateQueries({ queryKey: ['channel-tree', communityId] }),
+        ]);
       }
       selectChannel(result.channel.id);
     },

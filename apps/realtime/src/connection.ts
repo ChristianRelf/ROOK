@@ -46,6 +46,18 @@ import type { PresenceTracker } from './presence.js';
 
 type ConnectionState = 'awaiting-identify' | 'ready' | 'closed';
 
+/**
+ * Minimum interval between *miss-driven* re-resolutions of a socket's
+ * accessible channel set.
+ *
+ * Short enough that a client creating two channels in quick succession can
+ * subscribe to both, long enough that a client sending subscribe frames in a
+ * loop cannot turn each one into a database query. The gateway's inbound frame
+ * limit already bounds how fast those frames can arrive, so this only has to
+ * stop a burst, not police a sustained rate.
+ */
+const ACCESSIBLE_REFRESH_MIN_MS = 250;
+
 export interface ConnectionDependencies {
   readonly config: RealtimeConfig;
   readonly logger: Logger;
@@ -84,6 +96,21 @@ export function handleConnection(socket: WebSocket, deps: ConnectionDependencies
   /** Channels this socket is subscribed to, and what it may subscribe to. */
   const subscribed = new Set<ChannelId>();
   let accessible = new Set<ChannelId>();
+  /**
+   * When the accessible set was last re-resolved because of a subscribe miss.
+   *
+   * The set is cached because resolving it is a database query and it is
+   * consulted on every subscribe. But it cannot be cached for the life of the
+   * connection: a channel created *after* identify would never be in it, so
+   * subscribing to a channel you just created would be rejected until you
+   * reconnected — and no messages would arrive in it. See `subscribeTo`.
+   *
+   * Deliberately *not* set by the resolution at identify time. A client
+   * subscribes to a newly created channel within milliseconds of connecting,
+   * and counting the identify resolution against the throttle would refuse
+   * exactly the refresh this exists to allow.
+   */
+  let accessibleRefreshedAt = 0;
   /** Community-scoped subscriptions, for events that are not tied to a channel. */
   const subscribedCommunities = new Set<string>();
 
@@ -199,16 +226,44 @@ export function handleConnection(socket: WebSocket, deps: ConnectionDependencies
     return framesInWindow <= config.maxFramesPerWindow;
   }
 
+  /**
+   * Re-resolves which channels this socket may subscribe to.
+   *
+   * Rate limited by `ACCESSIBLE_REFRESH_MIN_MS` so a client asking repeatedly
+   * for channels it cannot see turns into one query per window rather than one
+   * per frame — otherwise the refresh below would be a free way to make the
+   * gateway hammer Postgres.
+   */
+  async function refreshAccessible(): Promise<void> {
+    if (user === undefined) return;
+    if (Date.now() - accessibleRefreshedAt < ACCESSIBLE_REFRESH_MIN_MS) return;
+
+    accessible = new Set(await deps.listAccessibleChannelIds(user.id));
+    accessibleRefreshedAt = Date.now();
+  }
+
   async function subscribeTo(channelIds: readonly ChannelId[]): Promise<{
     accepted: ChannelId[];
     rejected: ChannelId[];
   }> {
+    // A miss against the cached set is re-checked once against the database
+    // before being refused. This is what makes a channel created during the
+    // connection subscribable: the client is told about it by
+    // `channel.created`, subscribes, and the id is not in a set that was
+    // resolved before the channel existed.
+    //
+    // The refresh happens once for the whole batch rather than per id, so
+    // subscribing to twenty new channels costs one extra query, not twenty.
+    if (channelIds.some((channelId) => !accessible.has(channelId))) {
+      await refreshAccessible();
+    }
+
     const accepted: ChannelId[] = [];
     const rejected: ChannelId[] = [];
 
     for (const channelId of channelIds) {
-      // Checked against the set resolved at identify time. A client cannot
-      // subscribe to a channel by guessing its id.
+      // Still authoritative: the set comes from a membership join, so a client
+      // cannot subscribe to a channel by guessing its id.
       if (!accessible.has(channelId)) {
         rejected.push(channelId);
         continue;
@@ -242,9 +297,10 @@ export function handleConnection(socket: WebSocket, deps: ConnectionDependencies
 
     clearTimeout(identifyTimer);
 
-    // Resolved once per connection and cached for its lifetime. A channel
-    // created later arrives as a `channel.created` event, which the client
-    // follows with a subscribe — and that path re-checks access.
+    // Resolved here and cached, then re-resolved on demand by `subscribeTo`
+    // when a client asks for a channel the cached set does not contain. The
+    // throttle timestamp is left at zero so that first on-demand refresh is
+    // allowed through immediately.
     accessible = new Set(await deps.listAccessibleChannelIds(user.id));
 
     // User-scoped events (media processing results) go to all their devices.

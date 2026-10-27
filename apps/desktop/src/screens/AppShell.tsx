@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { useChannels, useCommunities } from '../lib/queries.js';
+import { useEffect, useMemo } from 'react';
+import type { ChannelUnread, UnreadSummary } from '@rook/contracts';
+import { useCommunities } from '../lib/queries.js';
+import { useChannelTree, useUnread } from '../lib/admin-queries.js';
 import { useUiStore } from '../stores/ui.js';
 import { CommunityRail } from '../components/CommunityRail.jsx';
 import { ChannelSidebar } from '../components/ChannelSidebar.jsx';
@@ -11,8 +13,8 @@ import { Dialogs } from '../components/Dialogs.jsx';
 /**
  * The three-pane application shell.
  *
- *   rail      communities, fixed width
- *   sidebar   channels in the selected community
+ *   rail      communities, with unread and mention indicators
+ *   sidebar   categories and channels in the selected community
  *   main      the conversation, plus an optional member list
  *
  * Layout notes that matter for a window that is resized constantly:
@@ -23,7 +25,17 @@ import { Dialogs } from '../components/Dialogs.jsx';
  *   * Panes that scroll are `min-h-0`/`min-w-0`. Without that, a flex child
  *     refuses to shrink below its content and the scroll container silently
  *     grows past the viewport instead of scrolling.
+ *
+ * Unread state is fetched once here and handed down as lookup maps rather than
+ * being queried in each row. The rail and the sidebar both need it, and a
+ * per-row query would be one request per channel on every render of a sidebar
+ * that can hold hundreds.
  */
+
+/** Stable empty maps, so a render that has no data does not build new ones. */
+const NO_CHANNEL_UNREAD: ReadonlyMap<string, ChannelUnread> = new Map();
+const NO_COMMUNITY_UNREAD: ReadonlyMap<string, UnreadSummary['communities'][number]> = new Map();
+
 export function AppShell() {
   const communities = useCommunities();
   const selectedCommunityId = useUiStore((state) => state.selectedCommunityId);
@@ -32,7 +44,25 @@ export function AppShell() {
   const selectChannel = useUiStore((state) => state.selectChannel);
   const showMembers = useUiStore((state) => state.showMembers);
 
-  const channels = useChannels(selectedCommunityId);
+  const tree = useChannelTree(selectedCommunityId);
+  const unread = useUnread();
+
+  // Indexed once per fetch rather than scanned per row: a linear search inside
+  // a channel row turns drawing the sidebar into O(channels x channels).
+  const unreadByChannel = useMemo(() => {
+    if (unread.data === undefined) return NO_CHANNEL_UNREAD;
+    return new Map(unread.data.channels.map((entry) => [entry.channelId as string, entry]));
+  }, [unread.data]);
+
+  const unreadByCommunity = useMemo(() => {
+    if (unread.data === undefined) return NO_COMMUNITY_UNREAD;
+    return new Map(unread.data.communities.map((entry) => [entry.communityId as string, entry]));
+  }, [unread.data]);
+
+  const channels = tree.data?.channels;
+  const categories = tree.data?.categories;
+
+  const community = communities.data?.find((item) => item.id === selectedCommunityId);
 
   // Select the first community once they load, so the app does not open on an
   // empty pane when the user is already a member of something.
@@ -47,14 +77,16 @@ export function AppShell() {
   // channel is not in this community's list (it was deleted, or belonged to a
   // community we just switched away from), fall back to the first.
   useEffect(() => {
-    const list = channels.data;
+    const list = channels;
     if (list === undefined || list.length === 0) return;
 
     const stillValid =
       selectedChannelId !== undefined && list.some((channel) => channel.id === selectedChannelId);
 
     if (!stillValid) selectChannel(list[0]?.id);
-  }, [channels.data, selectedChannelId, selectChannel]);
+  }, [channels, selectedChannelId, selectChannel]);
+
+  const selectedChannel = channels?.find((item) => item.id === selectedChannelId);
 
   return (
     <div className="flex h-full overflow-hidden bg-base">
@@ -62,25 +94,29 @@ export function AppShell() {
         communities={communities.data ?? []}
         loading={communities.isLoading}
         error={communities.error}
+        unreadByCommunity={unreadByCommunity}
       />
 
       <ChannelSidebar
-        channels={channels.data ?? []}
-        loading={channels.isLoading}
-        error={channels.error}
-        community={communities.data?.find((item) => item.id === selectedCommunityId)}
+        channels={channels}
+        categories={categories}
+        unreadByChannel={unreadByChannel}
+        loading={tree.isLoading}
+        error={tree.error}
+        community={community}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
         <ConnectionBanner />
         <div className="flex min-h-0 flex-1">
           <ConversationPane
-            channel={channels.data?.find((item) => item.id === selectedChannelId)}
+            channel={selectedChannel}
             hasCommunity={selectedCommunityId !== undefined}
-            hasChannels={(channels.data?.length ?? 0) > 0}
+            hasChannels={(channels?.length ?? 0) > 0}
+            community={community}
           />
           {showMembers && selectedCommunityId !== undefined ? (
-            <MemberSidebar communityId={selectedCommunityId} />
+            <MemberSidebar communityId={selectedCommunityId} community={community} />
           ) : null}
         </div>
       </main>

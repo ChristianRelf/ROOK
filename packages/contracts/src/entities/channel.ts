@@ -1,6 +1,11 @@
 import { z } from 'zod';
-import { channelIdSchema, communityIdSchema, userIdSchema } from '../ids.js';
-import { channelNameSchema, channelTopicSchema, isoTimestampSchema } from '../primitives.js';
+import { categoryIdSchema, channelIdSchema, communityIdSchema, userIdSchema } from '../ids.js';
+import {
+  channelNameSchema,
+  channelTopicSchema,
+  isoTimestampSchema,
+  positionSchema,
+} from '../primitives.js';
 
 /**
  * Channels.
@@ -19,8 +24,14 @@ export const channelSchema = z.object({
   kind: channelKindSchema,
   name: channelNameSchema,
   topic: channelTopicSchema.nullable(),
-  /** Manual ordering within the sidebar; ties break by name. */
-  position: z.number().int().nonnegative(),
+  /**
+   * The category this channel sits under, or null for an uncategorised
+   * channel. Uncategorised channels sort above every category, which is what a
+   * community looks like before anyone has organised it.
+   */
+  categoryId: categoryIdSchema.nullable(),
+  /** Manual ordering within its category; ties break by id. */
+  position: positionSchema,
   createdBy: userIdSchema,
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,

@@ -72,6 +72,9 @@ export function AppServicesProvider({ children }: { readonly children: ReactNode
           void queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
         }
         void queryClient.invalidateQueries({ queryKey: ['communities'] });
+        // Unread counts are derived server-side, so this is the only way to
+        // recover badges for messages that arrived while the socket was down.
+        void queryClient.invalidateQueries({ queryKey: ['unread'] });
       },
     }),
   );
@@ -120,10 +123,28 @@ function applyEvent(event: ServerEvent, queryClient: ReturnType<typeof useQueryC
   const messages = useMessagesStore.getState();
 
   switch (event.type) {
-    case 'message.created':
-    case 'message.updated': {
+    case 'message.created': {
       // Keyed by message id, so a duplicate is a no-op.
       messages.upsert(event.channelId, event.message);
+
+      // A message in a channel the user is not looking at changes its badge.
+      // Invalidating rather than incrementing locally keeps one source of
+      // truth for the count: the server derives it from read position, and a
+      // local counter would drift the first time an event arrived twice —
+      // which at-least-once delivery guarantees will happen.
+      //
+      // Skipped for the open channel, which marks itself read instead.
+      if (event.channelId !== useUiStore.getState().selectedChannelId) {
+        void queryClient.invalidateQueries({ queryKey: ['unread'] });
+      }
+      return;
+    }
+
+    case 'message.updated': {
+      messages.upsert(event.channelId, event.message);
+      // An edit can add or remove a mention, so the badge may change even
+      // though no new message arrived.
+      void queryClient.invalidateQueries({ queryKey: ['unread'] });
       return;
     }
 
@@ -141,11 +162,62 @@ function applyEvent(event: ServerEvent, queryClient: ReturnType<typeof useQueryC
     case 'channel.updated': {
       // Channels are server state, so the query is invalidated rather than
       // patched: refetching is cheap and avoids two sources of truth.
+      void queryClient.invalidateQueries({ queryKey: ['channel-tree', event.communityId] });
       void queryClient.invalidateQueries({ queryKey: ['channels', event.communityId] });
+      void queryClient.invalidateQueries({ queryKey: ['unread'] });
+      return;
+    }
+
+    case 'channel.deleted': {
+      // The selection is cleared first so the conversation pane does not spend
+      // a frame rendering a channel that is gone. The shell's stale-selection
+      // effect then falls back to the first remaining channel.
+      if (useUiStore.getState().selectedChannelId === event.channelId) {
+        useUiStore.getState().selectChannel(undefined);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['channel-tree', event.communityId] });
+      void queryClient.invalidateQueries({ queryKey: ['channels', event.communityId] });
+      void queryClient.invalidateQueries({ queryKey: ['unread'] });
+      return;
+    }
+
+    case 'category.created':
+    case 'category.updated':
+    case 'category.deleted': {
+      // Deleting a category leaves its channels in place as uncategorised, so
+      // the whole tree is refetched rather than reparenting rows locally —
+      // which would be a second implementation of the server's grouping rule.
+      void queryClient.invalidateQueries({ queryKey: ['channel-tree', event.communityId] });
       return;
     }
 
     case 'member.joined': {
+      void queryClient.invalidateQueries({ queryKey: ['members', event.communityId] });
+      void queryClient.invalidateQueries({ queryKey: ['communities'] });
+      return;
+    }
+
+    case 'member.updated': {
+      void queryClient.invalidateQueries({ queryKey: ['members', event.communityId] });
+      // The viewer's own role may be what changed, and that decides which
+      // administrative affordances the UI offers.
+      void queryClient.invalidateQueries({ queryKey: ['communities'] });
+      return;
+    }
+
+    case 'member.removed': {
+      const session = useSessionStore.getState();
+
+      // If it was us, the community is gone from our list entirely — including
+      // its channels and badges. Deselecting first avoids rendering a
+      // community we are no longer in while the refetch is in flight.
+      if (session.user?.id === event.userId) {
+        if (useUiStore.getState().selectedCommunityId === event.communityId) {
+          useUiStore.getState().selectCommunity(undefined);
+        }
+        void queryClient.invalidateQueries({ queryKey: ['unread'] });
+      }
+
       void queryClient.invalidateQueries({ queryKey: ['members', event.communityId] });
       void queryClient.invalidateQueries({ queryKey: ['communities'] });
       return;

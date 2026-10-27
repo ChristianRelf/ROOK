@@ -12,16 +12,26 @@
 export * from './ids.js';
 export * from './primitives.js';
 export * from './errors.js';
+export * from './mentions.js';
+export * from './authorization.js';
 
 export * from './entities/user.js';
 export * from './entities/community.js';
 export * from './entities/channel.js';
+export * from './entities/category.js';
 export * from './entities/message.js';
 export * from './entities/media.js';
+export * from './entities/invite.js';
+export * from './entities/audit.js';
+export * from './entities/unread.js';
 
 export * from './http/auth.js';
 export * from './http/pagination.js';
 export * from './http/communities.js';
+export * from './http/categories.js';
+export * from './http/invites.js';
+export * from './http/audit.js';
+export * from './http/unread.js';
 export * from './http/messages.js';
 export * from './http/media.js';
 

@@ -40,6 +40,8 @@ import { toMessage, type MessageRow } from '../internal/rows.js';
  */
 const messageSelect = `
   m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.deleted_at,
+  m.mentions_everyone,
+  mentioned.mentioned_user_ids,
   a.id              as author_id,
   a.username        as author_username,
   a.display_name    as author_display_name,
@@ -85,6 +87,14 @@ const messageFrom = `
     join media_assets ma on ma.id = att_link.asset_id
     where att_link.message_id = m.id
   ) att on true
+  -- Mentions aggregated per message in their own lateral, for the same reason
+  -- as attachments: a top-level join would fan out and duplicate message rows,
+  -- and a follow-up query per message would be an N+1 on history loads.
+  left join lateral (
+    select array_agg(mm.user_id) as mentioned_user_ids
+    from message_mentions mm
+    where mm.message_id = m.id
+  ) mentioned on true
 `;
 
 export interface SendMessageInput {
@@ -93,6 +103,16 @@ export interface SendMessageInput {
   readonly content: string | null;
   readonly attachmentIds: readonly MediaAssetId[];
   readonly idempotencyKey: string;
+  /**
+   * Usernames the content mentions, parsed by the caller.
+   *
+   * Passed in rather than parsed here so the repository stays free of content
+   * interpretation, and so the service and the client share one tokeniser (see
+   * `parseMentions` in @rook/contracts). Names that do not resolve to a member
+   * of this channel's community are dropped by the insert below.
+   */
+  readonly mentionUsernames: readonly string[];
+  readonly mentionsEveryone: boolean;
 }
 
 export interface SendMessageResult {
@@ -126,8 +146,20 @@ export interface MessageRepository {
       limit: number;
     },
   ) => Promise<MessagePage>;
-  /** Edits content. Returns undefined if the message is missing or deleted. */
-  edit: (id: MessageId, content: string) => Promise<Message | undefined>;
+  /**
+   * Edits content and re-resolves its mentions.
+   *
+   * Re-resolving matters: adding someone's name in an edit should notify them,
+   * and removing it should stop a stale mention badge pointing at a message
+   * that no longer mentions them.
+   *
+   * Returns undefined if the message is missing or deleted.
+   */
+  edit: (
+    id: MessageId,
+    content: string,
+    mentions: { usernames: readonly string[]; everyone: boolean },
+  ) => Promise<Message | undefined>;
   /** Soft-deletes, leaving a tombstone. Returns the deletion time. */
   softDelete: (id: MessageId) => Promise<{ deletedAt: Date } | undefined>;
 }
@@ -160,8 +192,13 @@ export function createMessageRepository(db: Queryable): MessageRepository {
       // rather than creating a second message.
       const inserted = await db.query<{ id: string }>(
         sql`
-          insert into messages (id, channel_id, author_id, content, idempotency_key)
-          values (${id}, ${input.channelId}, ${input.authorId}, ${input.content}, ${input.idempotencyKey})
+          insert into messages (
+            id, channel_id, author_id, content, idempotency_key, mentions_everyone
+          )
+          values (
+            ${id}, ${input.channelId}, ${input.authorId}, ${input.content},
+            ${input.idempotencyKey}, ${input.mentionsEveryone}
+          )
           on conflict (channel_id, author_id, idempotency_key) do nothing
           returning id
         `,
@@ -193,6 +230,31 @@ export function createMessageRepository(db: Queryable): MessageRepository {
           message: await requireById(existingId as MessageId, 'messages.send(retry)'),
           created: false,
         };
+      }
+
+      if (input.mentionUsernames.length > 0) {
+        // Usernames are resolved to ids *in the insert*, joined through
+        // community_members. That join is the authorisation check: mentioning
+        // someone who is not a member of this channel's community inserts
+        // nothing, so a mention can never notify a stranger or be used to probe
+        // whether a username exists.
+        //
+        // The author is excluded because a message never mentions its own
+        // sender into their own unread badge.
+        await db.query(
+          sql`
+            insert into message_mentions (message_id, user_id, channel_id)
+            select ${id}, u.id, ${input.channelId}
+            from unnest(${[...input.mentionUsernames]}::text[]) as m(username)
+            join users u on u.username = m.username
+            join channels ch on ch.id = ${input.channelId}
+            join community_members cm
+              on cm.community_id = ch.community_id and cm.user_id = u.id
+            where u.id <> ${input.authorId}
+            on conflict (message_id, user_id) do nothing
+          `,
+          'messages.attachMentions',
+        );
       }
 
       if (input.attachmentIds.length > 0) {
@@ -259,18 +321,46 @@ export function createMessageRepository(db: Queryable): MessageRepository {
       };
     },
 
-    async edit(id, content) {
-      const result = await db.query<{ id: string }>(
+    async edit(id, content, mentions) {
+      const result = await db.query<{ channel_id: string; author_id: string }>(
         sql`
           update messages
-          set content = ${content}, edited_at = now()
+          set content = ${content},
+              edited_at = now(),
+              mentions_everyone = ${mentions.everyone}
           where id = ${id} and deleted_at is null
-          returning id
+          returning channel_id, author_id
         `,
         'messages.edit',
       );
 
-      if (result.rows[0] === undefined) return undefined;
+      const row = result.rows[0];
+      if (row === undefined) return undefined;
+
+      // Replace rather than merge: a name removed from the text must lose its
+      // mention row, which a merge would leave behind for ever.
+      await db.query(
+        sql`delete from message_mentions where message_id = ${id}`,
+        'messages.clearMentions',
+      );
+
+      if (mentions.usernames.length > 0) {
+        await db.query(
+          sql`
+            insert into message_mentions (message_id, user_id, channel_id)
+            select ${id}, u.id, ${row.channel_id}
+            from unnest(${[...mentions.usernames]}::text[]) as m(username)
+            join users u on u.username = m.username
+            join channels ch on ch.id = ${row.channel_id}
+            join community_members cm
+              on cm.community_id = ch.community_id and cm.user_id = u.id
+            where u.id <> ${row.author_id}
+            on conflict (message_id, user_id) do nothing
+          `,
+          'messages.reattachMentions',
+        );
+      }
+
       return loadById(id);
     },
 
@@ -281,7 +371,7 @@ export function createMessageRepository(db: Queryable): MessageRepository {
       const result = await db.query<{ deleted_at: Date }>(
         sql`
           update messages
-          set deleted_at = now(), content = null
+          set deleted_at = now(), content = null, mentions_everyone = false
           where id = ${id} and deleted_at is null
           returning deleted_at
         `,
@@ -289,7 +379,17 @@ export function createMessageRepository(db: Queryable): MessageRepository {
       );
 
       const row = result.rows[0];
-      return row === undefined ? undefined : { deletedAt: row.deleted_at };
+      if (row === undefined) return undefined;
+
+      // Mentions go with the content. A deleted message must not keep showing
+      // as an unread mention — there would be nothing to read when you got
+      // there, which is the most confusing possible badge.
+      await db.query(
+        sql`delete from message_mentions where message_id = ${id}`,
+        'messages.clearMentionsOnDelete',
+      );
+
+      return { deletedAt: row.deleted_at };
     },
   };
 }

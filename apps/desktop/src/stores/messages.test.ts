@@ -34,6 +34,8 @@ function makeMessage(sequence: number, overrides: Partial<Message> = {}): Messag
     },
     content: `message ${sequence}`,
     attachments: [],
+    mentionedUserIds: [],
+    mentionsEveryone: false,
     createdAt: new Date(1_700_000_000_000 + sequence * 1000).toISOString(),
     editedAt: null,
     deletedAt: null,

@@ -1,4 +1,5 @@
 import {
+  resolveMentionNames,
   type ChannelId,
   type CommunityRole,
   type MediaAssetId,
@@ -134,12 +135,21 @@ export function createMessageService(options: {
       return db.transaction('messages.send', async (tx) => {
         const repos = createRepositories(tx);
 
+        // Mentions are resolved from the content the server received, using
+        // the tokeniser in @rook/contracts that the client also renders with.
+        // Trusting a client-supplied mention list instead would let anyone
+        // notify any member of the community with a message that does not
+        // visibly mention them.
+        const mentions = resolveMentionNames(command.content ?? null);
+
         const result = await repos.messages.send({
           channelId: command.channelId,
           authorId: command.authorId,
           content: command.content ?? null,
           attachmentIds: command.attachmentIds,
           idempotencyKey: command.idempotencyKey,
+          mentionUsernames: mentions.usernames,
+          mentionsEveryone: mentions.everyone,
         });
 
         // Only publish for a genuinely new message. A retried send with the
@@ -188,7 +198,13 @@ export function createMessageService(options: {
 
       return db.transaction('messages.edit', async (tx) => {
         const txRepos = createRepositories(tx);
-        const updated = await txRepos.messages.edit(messageId, content);
+        // Re-resolved on edit: adding a name in an edit should notify, and
+        // removing one should clear the badge it created.
+        const mentions = resolveMentionNames(content);
+        const updated = await txRepos.messages.edit(messageId, content, {
+          usernames: mentions.usernames,
+          everyone: mentions.everyone,
+        });
 
         if (updated === undefined) {
           // Deleted between the check and the update.

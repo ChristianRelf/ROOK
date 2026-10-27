@@ -1,6 +1,14 @@
 import { z } from 'zod';
-import { channelIdSchema, communityIdSchema, messageIdSchema, userIdSchema } from '../ids.js';
+import {
+  categoryIdSchema,
+  channelIdSchema,
+  communityIdSchema,
+  messageIdSchema,
+  userIdSchema,
+} from '../ids.js';
 import { channelSchema } from '../entities/channel.js';
+import { channelCategorySchema } from '../entities/category.js';
+import { communityRoleSchema } from '../entities/community.js';
 import { messageSchema } from '../entities/message.js';
 import { mediaAssetSchema } from '../entities/media.js';
 import { publicUserSchema } from '../entities/user.js';
@@ -106,6 +114,72 @@ export const channelUpdatedEventSchema = z.object({
   channel: channelSchema,
 });
 
+export const channelDeletedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('channel.deleted'),
+  communityId: communityIdSchema,
+  channelId: channelIdSchema,
+});
+
+export const categoryCreatedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('category.created'),
+  communityId: communityIdSchema,
+  category: channelCategorySchema,
+});
+
+export const categoryUpdatedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('category.updated'),
+  communityId: communityIdSchema,
+  category: channelCategorySchema,
+});
+
+/**
+ * A category was removed.
+ *
+ * Carries no channel list: deleting a category leaves its channels in place as
+ * uncategorised, and the client refetches the tree rather than trying to
+ * reparent rows from an event. Reparenting locally would be a second source of
+ * truth for sidebar structure.
+ */
+export const categoryDeletedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('category.deleted'),
+  communityId: communityIdSchema,
+  categoryId: categoryIdSchema,
+});
+
+/**
+ * A member's role changed.
+ *
+ * Delivered to the whole community, not just the affected member: role is
+ * visible in the member list, so everyone's sidebar is stale until they are
+ * told. The affected user's own client also uses it to re-evaluate which
+ * administrative affordances to show.
+ */
+export const memberUpdatedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('member.updated'),
+  communityId: communityIdSchema,
+  member: publicUserSchema,
+  role: communityRoleSchema,
+});
+
+/**
+ * A member left or was removed.
+ *
+ * The same event for both, because the distinction is in the audit log rather
+ * than in what every client has to do about it — remove the row from the
+ * member list. The removed user's own client additionally drops the community.
+ */
+export const memberRemovedEventSchema = z.object({
+  ...envelopeFields,
+  type: z.literal('member.removed'),
+  communityId: communityIdSchema,
+  userId: userIdSchema,
+});
+
 export const memberJoinedEventSchema = z.object({
   ...envelopeFields,
   type: z.literal('member.joined'),
@@ -160,7 +234,13 @@ export const serverEventSchema = z.discriminatedUnion('type', [
   messageDeletedEventSchema,
   channelCreatedEventSchema,
   channelUpdatedEventSchema,
+  channelDeletedEventSchema,
+  categoryCreatedEventSchema,
+  categoryUpdatedEventSchema,
+  categoryDeletedEventSchema,
   memberJoinedEventSchema,
+  memberUpdatedEventSchema,
+  memberRemovedEventSchema,
   typingEventSchema,
   mediaUpdatedEventSchema,
   errorEventSchema,
@@ -190,7 +270,13 @@ export const durableEventTypes = [
   'message.deleted',
   'channel.created',
   'channel.updated',
+  'channel.deleted',
+  'category.created',
+  'category.updated',
+  'category.deleted',
   'member.joined',
+  'member.updated',
+  'member.removed',
   'media.updated',
 ] as const satisfies readonly ServerEventType[];
 

@@ -93,6 +93,7 @@ export function registerCommunityRoutes(app: FastifyInstance, context: AppContex
         members: result.members,
         nextCursor: result.nextCursor,
         hasMore: result.hasMore,
+        totalCount: result.totalCount,
       });
     },
   );
@@ -113,6 +114,30 @@ export function registerCommunityRoutes(app: FastifyInstance, context: AppContex
     },
   );
 
+  /**
+   * Categories and channels together.
+   *
+   * The sidebar cannot render either alone, so fetching them separately would
+   * guarantee a frame where channels are grouped wrongly. This is the endpoint
+   * the desktop client actually uses; `/channels` remains for callers that
+   * only want the flat list.
+   */
+  app.get(
+    '/v1/communities/:communityId/channel-tree',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { user } = identityOf(request);
+      const { communityId } = parseParams(communityParamsSchema, request.params);
+
+      const result = await context.communities.channelTree(communityId, user.id);
+      if (!result.ok) {
+        throw problems.communityNotFound();
+      }
+
+      return reply.send({ categories: result.categories, channels: result.channels });
+    },
+  );
+
   app.post(
     '/v1/communities/:communityId/channels',
     { preHandler: requireAuth },
@@ -125,6 +150,7 @@ export function registerCommunityRoutes(app: FastifyInstance, context: AppContex
         communityId,
         name: body.name,
         topic: body.topic,
+        categoryId: body.categoryId,
         createdBy: user.id,
       });
 
@@ -136,6 +162,8 @@ export function registerCommunityRoutes(app: FastifyInstance, context: AppContex
             throw problems.forbidden('You cannot create channels in that community.');
           case 'name_taken':
             throw new HttpProblem('conflict', 'A channel with that name already exists.');
+          case 'category_not_found':
+            throw problems.notFound('That category');
         }
       }
 

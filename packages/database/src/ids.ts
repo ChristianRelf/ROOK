@@ -1,15 +1,21 @@
 import { v7 as uuidv7 } from 'uuid';
 import {
+  asAuditEntryId,
+  asCategoryId,
   asChannelId,
   asCommunityId,
   asEventId,
+  asInviteId,
   asMediaAssetId,
   asMessageId,
   asSessionId,
   asUserId,
+  type AuditEntryId,
+  type CategoryId,
   type ChannelId,
   type CommunityId,
   type EventId,
+  type InviteId,
   type MediaAssetId,
   type MessageId,
   type SessionId,
@@ -46,6 +52,9 @@ export const newChannelId = (): ChannelId => asChannelId(uuidv7());
 export const newMessageId = (): MessageId => asMessageId(uuidv7());
 export const newMediaAssetId = (): MediaAssetId => asMediaAssetId(uuidv7());
 export const newEventId = (): EventId => asEventId(uuidv7());
+export const newCategoryId = (): CategoryId => asCategoryId(uuidv7());
+export const newInviteId = (): InviteId => asInviteId(uuidv7());
+export const newAuditEntryId = (): AuditEntryId => asAuditEntryId(uuidv7());
 
 /**
  * Extracts the creation time embedded in a UUIDv7.

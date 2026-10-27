@@ -1,5 +1,7 @@
 import {
+  type CategoryId,
   type Channel,
+  type ChannelCategory,
   type ChannelId,
   type CommunityId,
   type CommunityMember,
@@ -33,11 +35,26 @@ export type CreateChannelResult =
   | { readonly ok: true; readonly channel: Channel }
   | {
       readonly ok: false;
-      readonly reason: 'community_not_found' | 'forbidden' | 'name_taken';
+      readonly reason: 'community_not_found' | 'forbidden' | 'name_taken' | 'category_not_found';
     };
 
 export type ListChannelsResult =
   | { readonly ok: true; readonly channels: Channel[] }
+  | { readonly ok: false; readonly reason: 'community_not_found' };
+
+/**
+ * The sidebar's whole structure in one result.
+ *
+ * Categories and channels are fetched together because neither renders alone:
+ * channels without their categories have nowhere to go, and two round trips
+ * mean a frame where the grouping is visibly wrong.
+ */
+export type ChannelTreeResult =
+  | {
+      readonly ok: true;
+      readonly categories: ChannelCategory[];
+      readonly channels: Channel[];
+    }
   | { readonly ok: false; readonly reason: 'community_not_found' };
 
 export type ListMembersResult =
@@ -46,6 +63,7 @@ export type ListMembersResult =
       readonly members: CommunityMember[];
       readonly nextCursor: string | null;
       readonly hasMore: boolean;
+      readonly totalCount: number;
     }
   | { readonly ok: false; readonly reason: 'community_not_found' };
 
@@ -58,9 +76,12 @@ export interface CommunityService {
     communityId: CommunityId;
     name: string;
     topic: string | undefined;
+    categoryId: CategoryId | undefined;
     createdBy: UserId;
   }) => Promise<CreateChannelResult>;
   listChannels: (communityId: CommunityId, viewerId: UserId) => Promise<ListChannelsResult>;
+  /** Categories and channels together, which is what the sidebar renders. */
+  channelTree: (communityId: CommunityId, viewerId: UserId) => Promise<ChannelTreeResult>;
   listMembers: (options: {
     communityId: CommunityId;
     viewerId: UserId;
@@ -128,6 +149,19 @@ export function createCommunityService(options: {
           });
         }
 
+        await repos.audit.append(tx, {
+          communityId: result.community.id,
+          actorId: userId,
+          actorLabel: member?.displayName ?? 'New member',
+          action: 'member.joined',
+          targetType: 'member',
+          targetId: userId,
+          targetLabel: member?.displayName ?? null,
+          // Distinguishes the permanent code from an invite link, which is the
+          // difference an admin reviewing the log cares about.
+          metadata: { via: 'join_code' },
+        });
+
         return { ok: true, community: result.community };
       });
     },
@@ -140,7 +174,7 @@ export function createCommunityService(options: {
       return createRepositories(db).communities.findById(communityId, viewerId);
     },
 
-    async createChannel({ communityId, name, topic, createdBy }) {
+    async createChannel({ communityId, name, topic, categoryId, createdBy }) {
       const repos = createRepositories(db);
 
       const membership = await repos.communities.findMembership(communityId, createdBy);
@@ -161,12 +195,27 @@ export function createCommunityService(options: {
           communityId,
           name,
           topic,
+          categoryId,
           createdBy,
         });
 
         if (!created.ok) {
-          return { ok: false, reason: 'name_taken' };
+          return { ok: false, reason: created.reason };
         }
+
+        // Logged here rather than only in the administration service, because
+        // creating a channel is a member-level action that still changes the
+        // community's structure — the log would have a hole in it otherwise.
+        const creator = await txRepos.users.findPublicById(createdBy);
+        await txRepos.audit.append(tx, {
+          communityId,
+          actorId: createdBy,
+          actorLabel: creator?.displayName ?? 'Unknown member',
+          action: 'channel.created',
+          targetType: 'channel',
+          targetId: created.channel.id,
+          targetLabel: created.channel.name,
+        });
 
         await events.channelCreated(tx, created.channel, createdBy);
         return { ok: true, channel: created.channel };
@@ -199,7 +248,28 @@ export function createCommunityService(options: {
         members: page.members,
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
+        totalCount: page.totalCount,
       };
+    },
+
+    async channelTree(communityId, viewerId) {
+      const repos = createRepositories(db);
+
+      const membership = await repos.communities.findMembership(communityId, viewerId);
+      if (membership === undefined) {
+        return { ok: false, reason: 'community_not_found' };
+      }
+
+      // Two queries rather than one join: a join would repeat every category
+      // row once per channel in it, and the client needs the empty categories
+      // too — an outer join that produced them would need null-channel rows
+      // filtered back out.
+      const [categories, channels] = await Promise.all([
+        repos.categories.listForCommunity(communityId),
+        repos.channels.listForCommunity(communityId),
+      ]);
+
+      return { ok: true, categories, channels };
     },
 
     async listSubscribableChannelIds(userId) {

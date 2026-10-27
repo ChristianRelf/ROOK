@@ -25,6 +25,9 @@ export type ChannelId = Brand<string, 'ChannelId'>;
 export type MessageId = Brand<string, 'MessageId'>;
 export type MediaAssetId = Brand<string, 'MediaAssetId'>;
 export type EventId = Brand<string, 'EventId'>;
+export type CategoryId = Brand<string, 'CategoryId'>;
+export type InviteId = Brand<string, 'InviteId'>;
+export type AuditEntryId = Brand<string, 'AuditEntryId'>;
 
 /** Builds a branded UUID schema with an error message naming the field. */
 const brandedUuid = <B extends string>(label: string) =>
@@ -37,6 +40,9 @@ export const channelIdSchema = brandedUuid<'ChannelId'>('channelId');
 export const messageIdSchema = brandedUuid<'MessageId'>('messageId');
 export const mediaAssetIdSchema = brandedUuid<'MediaAssetId'>('mediaAssetId');
 export const eventIdSchema = brandedUuid<'EventId'>('eventId');
+export const categoryIdSchema = brandedUuid<'CategoryId'>('categoryId');
+export const inviteIdSchema = brandedUuid<'InviteId'>('inviteId');
+export const auditEntryIdSchema = brandedUuid<'AuditEntryId'>('auditEntryId');
 
 /**
  * Casts a plain string to a branded id without validation.
@@ -52,3 +58,6 @@ export const asChannelId = (value: string): ChannelId => value as ChannelId;
 export const asMessageId = (value: string): MessageId => value as MessageId;
 export const asMediaAssetId = (value: string): MediaAssetId => value as MediaAssetId;
 export const asEventId = (value: string): EventId => value as EventId;
+export const asCategoryId = (value: string): CategoryId => value as CategoryId;
+export const asInviteId = (value: string): InviteId => value as InviteId;
+export const asAuditEntryId = (value: string): AuditEntryId => value as AuditEntryId;

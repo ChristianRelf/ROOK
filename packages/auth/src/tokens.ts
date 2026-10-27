@@ -151,3 +151,22 @@ export function generateJoinCode(): string {
 
   return `${adjective}-${noun}-${digits}`;
 }
+
+/**
+ * Generates an invite code.
+ *
+ * Unlike a join code, this is never read aloud — it is copied into a link — so
+ * it trades memorability for entropy. 12 base64url characters is 72 bits,
+ * which makes guessing a valid code pointless: the uniqueness index on
+ * `community_invites.code` would be the only thing an attacker could observe,
+ * and at that density they will not hit one.
+ *
+ * `base64url` rather than hex so the code stays short, and rather than base62
+ * so no modulo bias has to be corrected for — every character of the alphabet
+ * maps to exactly 6 bits of the random input.
+ */
+export function generateInviteCode(): string {
+  // 9 bytes encodes to exactly 12 base64url characters with no padding, so
+  // nothing has to be stripped and the length is constant.
+  return randomBytes(9).toString('base64url');
+}

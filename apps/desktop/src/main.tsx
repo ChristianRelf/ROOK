@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App.jsx';
 import { AppServicesProvider } from './lib/app-context.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import './index.css';
 
 /**
@@ -42,10 +43,18 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AppServicesProvider>
-        <App />
-      </AppServicesProvider>
-    </QueryClientProvider>
+    {/*
+      Outside the providers on purpose. A boundary inside them could not catch
+      a failure in the providers themselves, and that is exactly the class of
+      error that leaves a Tauri webview as an empty grey window with nothing
+      to report.
+    */}
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AppServicesProvider>
+          <App />
+        </AppServicesProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

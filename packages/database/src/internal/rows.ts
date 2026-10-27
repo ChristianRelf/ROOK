@@ -1,10 +1,18 @@
 import {
+  asAuditEntryId,
+  asCategoryId,
   asChannelId,
   asCommunityId,
+  asInviteId,
   asMediaAssetId,
   asMessageId,
   asUserId,
+  type AuditAction,
+  type AuditLogEntry,
+  type AuditTargetType,
   type Channel,
+  type ChannelCategory,
+  type CommunityInvite,
   type Community,
   type CommunityMember,
   type CommunityMembership,
@@ -152,6 +160,7 @@ export interface ChannelRow {
   kind: string;
   name: string;
   topic: string | null;
+  category_id: string | null;
   position: number;
   created_by: string;
   created_at: Date;
@@ -166,10 +175,109 @@ export function toChannel(row: ChannelRow): Channel {
     kind: 'text',
     name: row.name,
     topic: row.topic,
+    categoryId: row.category_id === null ? null : asCategoryId(row.category_id),
     position: row.position,
     createdBy: asUserId(row.created_by),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
+  };
+}
+
+export interface ChannelCategoryRow {
+  id: string;
+  community_id: string;
+  name: string;
+  position: number;
+  created_by: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export function toChannelCategory(row: ChannelCategoryRow): ChannelCategory {
+  return {
+    id: asCategoryId(row.id),
+    communityId: asCommunityId(row.community_id),
+    name: row.name,
+    position: row.position,
+    createdBy: asUserId(row.created_by),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+/** An invite joined to its creator, prefixed to avoid colliding with the invite's own columns. */
+export interface CommunityInviteRow {
+  id: string;
+  community_id: string;
+  code: string;
+  expires_at: Date | null;
+  max_uses: number | null;
+  uses: number;
+  revoked_at: Date | null;
+  created_at: Date;
+  creator_id: string;
+  creator_username: string;
+  creator_display_name: string;
+  creator_avatar_asset_id: string | null;
+  creator_created_at: Date;
+}
+
+export function toCommunityInvite(row: CommunityInviteRow, now: Date): CommunityInvite {
+  const expired = row.expires_at !== null && row.expires_at.getTime() <= now.getTime();
+  const exhausted = row.max_uses !== null && row.uses >= row.max_uses;
+
+  return {
+    id: asInviteId(row.id),
+    communityId: asCommunityId(row.community_id),
+    code: row.code,
+    createdBy: {
+      id: asUserId(row.creator_id),
+      username: row.creator_username,
+      displayName: row.creator_display_name,
+      avatarAssetId:
+        row.creator_avatar_asset_id === null ? null : asMediaAssetId(row.creator_avatar_asset_id),
+      createdAt: toIso(row.creator_created_at),
+    },
+    expiresAt: toIsoOrNull(row.expires_at),
+    maxUses: row.max_uses,
+    uses: row.uses,
+    revokedAt: toIsoOrNull(row.revoked_at),
+    createdAt: toIso(row.created_at),
+    // Resolved here rather than left to the client: "still usable" depends on
+    // the current time as well as the row, and a cached row would answer it
+    // wrongly the moment it goes stale.
+    active: row.revoked_at === null && !expired && !exhausted,
+  };
+}
+
+export interface AuditLogEntryRow {
+  id: string;
+  community_id: string;
+  actor_id: string | null;
+  actor_label: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  target_label: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
+}
+
+export function toAuditLogEntry(row: AuditLogEntryRow): AuditLogEntry {
+  return {
+    id: asAuditEntryId(row.id),
+    communityId: asCommunityId(row.community_id),
+    actorId: row.actor_id === null ? null : asUserId(row.actor_id),
+    actorLabel: row.actor_label,
+    // Cast rather than validated: the value was written by this process from
+    // the same closed enum, and a row that somehow holds an unknown action
+    // should still be readable rather than failing the whole page.
+    action: row.action as AuditAction,
+    targetType: row.target_type as AuditTargetType,
+    targetId: row.target_id,
+    targetLabel: row.target_label,
+    metadata: row.metadata ?? {},
+    createdAt: toIso(row.created_at),
   };
 }
 
@@ -231,8 +339,11 @@ export interface MessageRow extends AuthorColumns {
   created_at: Date;
   edited_at: Date | null;
   deleted_at: Date | null;
+  mentions_everyone: boolean;
   /** Aggregated attachments, avoiding a per-message follow-up query. */
   attachments: MediaAssetRow[] | null;
+  /** Aggregated mention rows, for the same reason as attachments. */
+  mentioned_user_ids: string[] | null;
 }
 
 export function toMessage(row: MessageRow): Message {
@@ -242,6 +353,8 @@ export function toMessage(row: MessageRow): Message {
     author: toAuthor(row),
     content: row.content,
     attachments: (row.attachments ?? []).map(toMediaAsset),
+    mentionedUserIds: (row.mentioned_user_ids ?? []).map(asUserId),
+    mentionsEveryone: row.mentions_everyone,
     createdAt: toIso(row.created_at),
     editedAt: toIsoOrNull(row.edited_at),
     deletedAt: toIsoOrNull(row.deleted_at),
@@ -273,8 +386,25 @@ export const columns = {
     c.created_at, c.updated_at
   `,
   channel: `
-    ch.id, ch.community_id, ch.kind, ch.name, ch.topic, ch.position,
-    ch.created_by, ch.created_at, ch.updated_at
+    ch.id, ch.community_id, ch.kind, ch.name, ch.topic, ch.category_id,
+    ch.position, ch.created_by, ch.created_at, ch.updated_at
+  `,
+  category: `
+    cat.id, cat.community_id, cat.name, cat.position, cat.created_by,
+    cat.created_at, cat.updated_at
+  `,
+  invite: `
+    inv.id, inv.community_id, inv.code, inv.expires_at, inv.max_uses,
+    inv.uses, inv.revoked_at, inv.created_at,
+    cu.id              as creator_id,
+    cu.username        as creator_username,
+    cu.display_name    as creator_display_name,
+    cu.avatar_asset_id as creator_avatar_asset_id,
+    cu.created_at      as creator_created_at
+  `,
+  auditEntry: `
+    al.id, al.community_id, al.actor_id, al.actor_label, al.action,
+    al.target_type, al.target_id, al.target_label, al.metadata, al.created_at
   `,
   mediaAsset: `
     ma.id, ma.owner_id, ma.status, ma.content_type, ma.byte_size,

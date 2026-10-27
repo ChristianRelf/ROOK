@@ -1,8 +1,20 @@
 import { useMembers } from '../lib/queries.js';
-import { useMessagesStore } from '../stores/messages.js';
+import { useMessagesStore, type TypingEntry } from '../stores/messages.js';
 import { useSessionStore } from '../stores/session.js';
 import { useUiStore } from '../stores/ui.js';
 import type { ChannelId } from '@rook/contracts';
+
+/**
+ * Returned for a channel with no typing entries.
+ *
+ * Hoisted to module scope on purpose. A zustand selector is also React's
+ * `getSnapshot`, which is called on every render and compared by reference --
+ * so returning a fresh `[]` from the selector makes every snapshot look like a
+ * change, and the component re-renders until React gives up with "Maximum
+ * update depth exceeded". A channel with nobody typing is the common case, so
+ * that is a hard crash the first time any conversation is opened.
+ */
+const NO_TYPING: readonly TypingEntry[] = [];
 
 /**
  * "Ada is typing..."
@@ -16,7 +28,7 @@ import type { ChannelId } from '@rook/contracts';
  * mid-sentence cannot leave a stuck indicator behind.
  */
 export function TypingIndicator({ channelId }: { readonly channelId: ChannelId }) {
-  const entries = useMessagesStore((state) => state.typing[channelId] ?? []);
+  const entries = useMessagesStore((state) => state.typing[channelId] ?? NO_TYPING);
   const currentUserId = useSessionStore((state) => state.user?.id);
   const communityId = useUiStore((state) => state.selectedCommunityId);
   const members = useMembers(communityId);

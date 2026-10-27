@@ -24,13 +24,17 @@ import {
   type SessionTokenService,
 } from '@rook/auth';
 import {
+  createAdministrationService,
   createCommunityService,
   createEventPublisher,
   createMediaService,
   createMessageService,
+  createReadStateService,
+  type AdministrationService,
   type CommunityService,
   type MediaService,
   type MessageService,
+  type ReadStateService,
 } from '@rook/messaging';
 import { createS3Storage, detectImageType, type ObjectStoragePort } from '@rook/media';
 import { createQueue, type QueuePort } from '@rook/queue';
@@ -64,6 +68,8 @@ export interface AppContext {
   readonly accounts: AccountService;
   readonly messages: MessageService;
   readonly communities: CommunityService;
+  readonly administration: AdministrationService;
+  readonly readState: ReadStateService;
   readonly media: MediaService;
   close: () => Promise<void>;
 }
@@ -134,6 +140,8 @@ export function createAppContext(config: ApiConfig): AppContext {
 
   const messages = createMessageService({ db, events });
   const communities = createCommunityService({ db, events });
+  const administration = createAdministrationService({ db, events });
+  const readState = createReadStateService({ db });
 
   const media = createMediaService({
     db,
@@ -203,6 +211,8 @@ export function createAppContext(config: ApiConfig): AppContext {
     accounts,
     messages,
     communities,
+    administration,
+    readState,
     media,
     async close() {
       // Reverse construction order.

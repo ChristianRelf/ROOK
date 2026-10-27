@@ -24,6 +24,17 @@ export const messageSchema = z.object({
   /** Null for a deleted message; the row is kept as a tombstone. */
   content: messageContentSchema.nullable(),
   attachments: z.array(mediaAssetSchema),
+  /**
+   * Users this message mentions, resolved at write time.
+   *
+   * Resolved on the server rather than re-parsed by every client: the set is
+   * what drives unread mention counts, so the client's rendering and the
+   * server's badge have to agree on it. Re-deriving it from the text in two
+   * places is how they stop agreeing.
+   */
+  mentionedUserIds: z.array(userIdSchema),
+  /** `@everyone`, which counts as a mention for every member of the community. */
+  mentionsEveryone: z.boolean(),
   createdAt: isoTimestampSchema,
   /** Set only when the author has edited the message. */
   editedAt: isoTimestampSchema.nullable(),

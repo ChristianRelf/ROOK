@@ -4,11 +4,16 @@ A modular, self-hostable communication platform: a Tauri desktop client over a
 TypeScript backend, built so the pieces can be deployed and scaled
 independently.
 
-This is a **foundation release**. It proves the architecture end to end --
-registration, communities, channels, persisted messaging with realtime
-delivery, and an asynchronous media pipeline -- rather than covering a broad
-feature set. [docs/limitations.md](docs/limitations.md) lists exactly what is
-and is not implemented; read it before planning work on top of this.
+It covers registration, communities, channels and categories, persisted
+messaging with realtime delivery, mentions and unread badges, role management,
+invite links, an administrative audit log, and an asynchronous media pipeline.
+
+It is still a **foundation release**: the aim is an architecture that holds up
+end to end rather than a broad feature set, and several obvious things are
+deliberately absent -- email, search, voice, direct messages.
+[docs/limitations.md](docs/limitations.md) lists exactly what is and is not
+implemented, including the rough edges; read it before planning work on top of
+this.
 
 ---
 
@@ -93,15 +98,15 @@ deployment.
 
 ## What runs where
 
-| Service                 | Port | Purpose                                                              |
-| ----------------------- | ---- | -------------------------------------------------------------------- |
-| `apps/api`              | 4000 | HTTP API: auth, communities, channels, messages, media authorisation |
-| `apps/realtime`         | 4001 | WebSocket gateway, and the outbox relay                              |
-| `services/media-worker` | 4002 | Image processing and scheduled housekeeping (health only)            |
-| `apps/desktop`          | 1420 | Vite dev server for the frontend                                     |
-| PostgreSQL              | 5432 | Source of truth                                                      |
-| Redis                   | 6379 | Cache, presence, rate limits, job queue, event fan-out               |
-| Object storage          | 8333 | S3-compatible (SeaweedFS locally)                                    |
+| Service                 | Port | Purpose                                                                                          |
+| ----------------------- | ---- | ------------------------------------------------------------------------------------------------ |
+| `apps/api`              | 4000 | HTTP API: auth, communities, channels, messages, administration, read state, media authorisation |
+| `apps/realtime`         | 4001 | WebSocket gateway, and the outbox relay                                                          |
+| `services/media-worker` | 4002 | Image processing and scheduled housekeeping (health only)                                        |
+| `apps/desktop`          | 1420 | Vite dev server for the frontend                                                                 |
+| PostgreSQL              | 5432 | Source of truth                                                                                  |
+| Redis                   | 6379 | Cache, presence, rate limits, job queue, event fan-out                                           |
+| Object storage          | 8333 | S3-compatible (SeaweedFS locally)                                                                |
 
 Every service exposes `/health/live`, `/health/ready` and `/metrics`.
 
@@ -176,10 +181,12 @@ rook/
 │   ├── realtime/        WebSocket gateway + outbox relay
 │   └── desktop/         Tauri 2 + React 19 client
 ├── packages/
-│   ├── contracts/       Shared Zod schemas: HTTP, events, transport envelope
+│   ├── contracts/       Shared Zod schemas: HTTP, events, transport envelope,
+│   │                    capability rules, mention parsing
 │   ├── database/        Schema, migrations, repositories, partition routing
-│   ├── auth/            Argon2, session tokens, capability resolution
-│   ├── messaging/       Chat domain logic (messages, channels, communities, media)
+│   ├── auth/            Argon2, session tokens (capability rules live in contracts)
+│   ├── messaging/       Chat domain logic (messages, channels, communities,
+│   │                    administration, read state, media)
 │   ├── media/           Object storage port, content detection, Sharp processing
 │   ├── queue/           Job contracts over BullMQ
 │   ├── config/          Validated environment configuration
@@ -227,7 +234,25 @@ assumed:
   same time.
 - **Authorisation** is resolved server-side on every request through a single
   capability module; a non-member gets "not found" rather than "forbidden", so
-  endpoints cannot be used to enumerate what exists.
+  endpoints cannot be used to enumerate what exists. The desktop client
+  resolves the _same_ rules to decide what to draw, which is why a button it
+  offers is never one the API refuses -- but the client's answer is never
+  trusted, only its own rendering depends on it.
+- **Acting on another member** needs rank, not just a role: an admin cannot
+  demote, remove or outrank a peer admin or the owner, and nobody can act on
+  themselves through an administrative path. Without the strict comparison, the
+  first disagreement between two admins is a race to click first.
+- **Mentions** are resolved from the content the server received, never from a
+  client-supplied list, and resolved through a membership join -- so a mention
+  cannot notify a non-member or be used to probe whether a username exists.
+- **Invite codes** are 72 bits from the CSPRNG, optionally expiring and
+  use-limited, and revocable. Redemption validates and claims a use in one
+  conditional `UPDATE`, so two people cannot both redeem the last use of a
+  one-use link.
+- **The audit log** is append-only, with no update or delete path in the
+  repository, and each entry is written in the same transaction as the change
+  it describes -- so it cannot record a change that rolled back, nor miss one
+  that committed.
 - **All SQL** is parameterised through one tagged-template builder; `raw()` is
   the only escape hatch and is used solely for keywords from closed sets.
 - **Uploads** never pass through the API. File type is determined from magic

@@ -8,7 +8,7 @@ import {
   canEditMessage,
   capabilitiesFor,
   hasAtLeastRole,
-} from './authorization.js';
+} from '@rook/contracts';
 
 /**
  * Argon2 parameters are reduced well below the production defaults so the

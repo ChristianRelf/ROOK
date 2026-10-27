@@ -28,8 +28,35 @@ export {
   type JoinCommunityResult,
   type CreateChannelResult,
   type ListChannelsResult,
+  type ChannelTreeResult,
   type ListMembersResult,
 } from './community-service.js';
+
+export {
+  createAdministrationService,
+  type AdministrationService,
+  type AuthorizationFailure,
+  type CategoryResult,
+  type CategoryMutationResult,
+  type CategoryDeleteResult,
+  type ChannelMutationResult,
+  type ChannelDeleteResult,
+  type ReorderResult,
+  type MemberRoleResult,
+  type MemberRemoveResult,
+  type InviteResult,
+  type InviteListResult,
+  type InviteRevokeResult,
+  type InvitePreviewResult,
+  type AcceptInviteResult,
+  type AuditListResult,
+} from './administration-service.js';
+
+export {
+  createReadStateService,
+  type ReadStateService,
+  type MarkReadResult,
+} from './read-state-service.js';
 
 export {
   createMediaService,

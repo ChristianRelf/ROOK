@@ -26,9 +26,12 @@ export {
 } from './migrator.js';
 
 export {
+  newAuditEntryId,
+  newCategoryId,
   newChannelId,
   newCommunityId,
   newEventId,
+  newInviteId,
   newMediaAssetId,
   newMessageId,
   newSessionId,
@@ -89,8 +92,41 @@ export {
   type ChannelRepository,
   type CreateChannelInput,
   type CreateChannelResult,
+  type UpdateChannelInput,
+  type UpdateChannelResult,
+  type ChannelPlacement,
   type AccessibleChannel,
 } from './repositories/channels.js';
+
+export {
+  createCategoryRepository,
+  type CategoryRepository,
+  type CreateCategoryInput,
+  type CreateCategoryResult,
+  type UpdateCategoryInput,
+  type UpdateCategoryResult,
+} from './repositories/categories.js';
+
+export {
+  createInviteRepository,
+  type InviteRepository,
+  type CreateInviteInput,
+  type ConsumeInviteResult,
+  type InvitePreviewRecord,
+} from './repositories/invites.js';
+
+export {
+  createAuditRepository,
+  type AuditRepository,
+  type AppendAuditInput,
+  type AuditLogPage,
+} from './repositories/audit.js';
+
+export {
+  createReadStateRepository,
+  type ReadStateRepository,
+  type ChannelUnreadRecord,
+} from './repositories/read-state.js';
 
 export {
   createMessageRepository,

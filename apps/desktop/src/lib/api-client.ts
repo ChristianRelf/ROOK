@@ -1,27 +1,45 @@
 import {
+  acceptInviteResponseSchema,
   apiErrorSchema,
+  auditLogResponseSchema,
+  categoryListResponseSchema,
+  categoryResponseSchema,
   channelListResponseSchema,
   channelResponseSchema,
+  channelTreeResponseSchema,
   communityListResponseSchema,
   communityResponseSchema,
   confirmUploadResponseSchema,
   createUploadResponseSchema,
   currentUserResponseSchema,
+  inviteListResponseSchema,
+  invitePreviewResponseSchema,
+  inviteResponseSchema,
+  markReadResponseSchema,
   mediaAssetResponseSchema,
   memberListResponseSchema,
+  memberResponseSchema,
   messagePageResponseSchema,
   messageResponseSchema,
+  removeMemberResponseSchema,
   sessionResponseSchema,
+  unreadSummaryResponseSchema,
+  type AssignableRole,
+  type AuditAction,
+  type CategoryId,
   type ChannelId,
   type CommunityId,
   type ErrorCode,
   type FieldError,
+  type InviteDuration,
+  type InviteId,
   type MediaAssetId,
   type MediaContentType,
   type MessageId,
   type PaginationDirection,
+  type UserId,
 } from '@rook/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 /**
  * The typed HTTP client.
@@ -308,6 +326,211 @@ export function createApiClient(options: ApiClientOptions) {
         }`,
         schema: memberListResponseSchema,
         signal,
+      }),
+
+    /**
+     * Categories and channels in one call.
+     *
+     * The sidebar cannot draw either alone, so this is what it uses rather
+     * than `listChannels` plus `listCategories`.
+     */
+    getChannelTree: (communityId: CommunityId, signal?: AbortSignal) =>
+      request({
+        method: 'GET',
+        path: `/v1/communities/${communityId}/channel-tree`,
+        schema: channelTreeResponseSchema,
+        signal,
+      }),
+
+    // --- Categories -------------------------------------------------------
+    listCategories: (communityId: CommunityId, signal?: AbortSignal) =>
+      request({
+        method: 'GET',
+        path: `/v1/communities/${communityId}/categories`,
+        schema: categoryListResponseSchema,
+        signal,
+      }),
+
+    createCategory: (communityId: CommunityId, input: { name: string }) =>
+      request({
+        method: 'POST',
+        path: `/v1/communities/${communityId}/categories`,
+        schema: categoryResponseSchema,
+        body: input,
+      }),
+
+    updateCategory: (
+      communityId: CommunityId,
+      categoryId: CategoryId,
+      input: { name?: string; position?: number },
+    ) =>
+      request({
+        method: 'PATCH',
+        path: `/v1/communities/${communityId}/categories/${categoryId}`,
+        schema: categoryResponseSchema,
+        body: input,
+      }),
+
+    deleteCategory: (communityId: CommunityId, categoryId: CategoryId) =>
+      request({
+        method: 'DELETE',
+        path: `/v1/communities/${communityId}/categories/${categoryId}`,
+        schema: z.object({ categoryId: z.string() }),
+      }),
+
+    reorderCategories: (communityId: CommunityId, categoryIds: readonly CategoryId[]) =>
+      request({
+        method: 'POST',
+        path: `/v1/communities/${communityId}/categories/reorder`,
+        // 204, so there is nothing to validate.
+        schema: z.undefined(),
+        body: { categoryIds },
+      }),
+
+    // --- Channel structure ------------------------------------------------
+    updateChannel: (
+      communityId: CommunityId,
+      channelId: ChannelId,
+      input: {
+        name?: string;
+        topic?: string | null;
+        categoryId?: CategoryId | null;
+        position?: number;
+      },
+    ) =>
+      request({
+        method: 'PATCH',
+        path: `/v1/communities/${communityId}/channels/${channelId}`,
+        schema: channelResponseSchema,
+        body: input,
+      }),
+
+    deleteChannel: (communityId: CommunityId, channelId: ChannelId) =>
+      request({
+        method: 'DELETE',
+        path: `/v1/communities/${communityId}/channels/${channelId}`,
+        schema: z.object({ channelId: z.string() }),
+      }),
+
+    reorderChannels: (
+      communityId: CommunityId,
+      channels: readonly {
+        channelId: ChannelId;
+        categoryId: CategoryId | null;
+        position: number;
+      }[],
+    ) =>
+      request({
+        method: 'POST',
+        path: `/v1/communities/${communityId}/channels/reorder`,
+        schema: z.undefined(),
+        body: { channels },
+      }),
+
+    // --- Roles and membership ---------------------------------------------
+    setMemberRole: (communityId: CommunityId, userId: UserId, role: AssignableRole) =>
+      request({
+        method: 'PATCH',
+        path: `/v1/communities/${communityId}/members/${userId}`,
+        schema: memberResponseSchema,
+        body: { role },
+      }),
+
+    removeMember: (communityId: CommunityId, userId: UserId) =>
+      request({
+        method: 'DELETE',
+        path: `/v1/communities/${communityId}/members/${userId}`,
+        schema: removeMemberResponseSchema,
+      }),
+
+    // --- Invites -----------------------------------------------------------
+    listInvites: (communityId: CommunityId, signal?: AbortSignal) =>
+      request({
+        method: 'GET',
+        path: `/v1/communities/${communityId}/invites`,
+        schema: inviteListResponseSchema,
+        signal,
+      }),
+
+    createInvite: (
+      communityId: CommunityId,
+      input: { expiresIn: InviteDuration; maxUses?: number },
+    ) =>
+      request({
+        method: 'POST',
+        path: `/v1/communities/${communityId}/invites`,
+        schema: inviteResponseSchema,
+        body: input,
+      }),
+
+    revokeInvite: (communityId: CommunityId, inviteId: InviteId) =>
+      request({
+        method: 'DELETE',
+        path: `/v1/communities/${communityId}/invites/${inviteId}`,
+        schema: inviteResponseSchema,
+      }),
+
+    previewInvite: (code: string, signal?: AbortSignal) =>
+      request({
+        method: 'GET',
+        path: `/v1/invites/${encodeURIComponent(code)}`,
+        schema: invitePreviewResponseSchema,
+        signal,
+      }),
+
+    acceptInvite: (code: string) =>
+      request({
+        method: 'POST',
+        path: '/v1/invites/accept',
+        schema: acceptInviteResponseSchema,
+        body: { code },
+      }),
+
+    // --- Audit log ---------------------------------------------------------
+    listAuditLog: (
+      communityId: CommunityId,
+      params: { cursor?: string; limit?: number; action?: AuditAction; actorId?: string } = {},
+      signal?: AbortSignal,
+    ) => {
+      const query = new URLSearchParams();
+      if (params.cursor !== undefined) query.set('cursor', params.cursor);
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.action !== undefined) query.set('action', params.action);
+      if (params.actorId !== undefined) query.set('actorId', params.actorId);
+
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request({
+        method: 'GET',
+        path: `/v1/communities/${communityId}/audit-log${suffix}`,
+        schema: auditLogResponseSchema,
+        signal,
+      });
+    },
+
+    // --- Read state --------------------------------------------------------
+    getUnread: (signal?: AbortSignal) =>
+      request({
+        method: 'GET',
+        path: '/v1/unread',
+        schema: unreadSummaryResponseSchema,
+        signal,
+      }),
+
+    markChannelRead: (channelId: ChannelId, lastReadMessageId: MessageId) =>
+      request({
+        method: 'POST',
+        path: `/v1/channels/${channelId}/read`,
+        schema: markReadResponseSchema,
+        body: { lastReadMessageId },
+      }),
+
+    setChannelMuted: (channelId: ChannelId, muted: boolean) =>
+      request({
+        method: 'POST',
+        path: `/v1/channels/${channelId}/mute`,
+        schema: markReadResponseSchema,
+        body: { muted },
       }),
 
     // --- Messages ---------------------------------------------------------

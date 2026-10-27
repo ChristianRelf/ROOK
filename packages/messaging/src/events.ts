@@ -1,8 +1,11 @@
 import {
   PROTOCOL_VERSION,
+  type CategoryId,
   type Channel,
+  type ChannelCategory,
   type ChannelId,
   type CommunityId,
+  type CommunityRole,
   type MediaAsset,
   type Message,
   type MessageId,
@@ -38,6 +41,38 @@ export interface EventPublisher {
     },
   ) => Promise<void>;
   channelCreated: (tx: Queryable, channel: Channel, originUserId: UserId) => Promise<void>;
+  channelUpdated: (tx: Queryable, channel: Channel, originUserId: UserId) => Promise<void>;
+  channelDeleted: (
+    tx: Queryable,
+    options: { communityId: CommunityId; channelId: ChannelId; originUserId: UserId },
+  ) => Promise<void>;
+  categoryCreated: (
+    tx: Queryable,
+    category: ChannelCategory,
+    originUserId: UserId,
+  ) => Promise<void>;
+  categoryUpdated: (
+    tx: Queryable,
+    category: ChannelCategory,
+    originUserId: UserId,
+  ) => Promise<void>;
+  categoryDeleted: (
+    tx: Queryable,
+    options: { communityId: CommunityId; categoryId: CategoryId; originUserId: UserId },
+  ) => Promise<void>;
+  memberUpdated: (
+    tx: Queryable,
+    options: {
+      communityId: CommunityId;
+      member: PublicUser;
+      role: CommunityRole;
+      originUserId: UserId;
+    },
+  ) => Promise<void>;
+  memberRemoved: (
+    tx: Queryable,
+    options: { communityId: CommunityId; userId: UserId; originUserId: UserId | undefined },
+  ) => Promise<void>;
   memberJoined: (
     tx: Queryable,
     options: { communityId: CommunityId; member: PublicUser },
@@ -118,6 +153,128 @@ export function createEventPublisher(outbox: OutboxRepository): EventPublisher {
         audience: { scope: 'community', communityId: channel.communityId },
         payload,
         originUserId,
+      });
+    },
+
+    async channelUpdated(tx, channel, originUserId) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'channel.updated',
+        communityId: channel.communityId,
+        channel,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'channel.updated',
+        audience: { scope: 'community', communityId: channel.communityId },
+        payload,
+        originUserId,
+      });
+    },
+
+    async channelDeleted(tx, options) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'channel.deleted',
+        communityId: options.communityId,
+        channelId: options.channelId,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'channel.deleted',
+        // Community scope, not channel scope. A channel-scoped event would be
+        // published to a Redis channel that every client is about to stop
+        // listening to, and members who were not viewing it would never learn
+        // it is gone.
+        audience: { scope: 'community', communityId: options.communityId },
+        payload,
+        // Not suppressed for the deleter: their own sidebar has to lose the
+        // row too, and unlike an optimistic send there is nothing on screen
+        // that would flicker.
+        originUserId: undefined,
+      });
+    },
+
+    async categoryCreated(tx, category, originUserId) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'category.created',
+        communityId: category.communityId,
+        category,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'category.created',
+        audience: { scope: 'community', communityId: category.communityId },
+        payload,
+        originUserId,
+      });
+    },
+
+    async categoryUpdated(tx, category, originUserId) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'category.updated',
+        communityId: category.communityId,
+        category,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'category.updated',
+        audience: { scope: 'community', communityId: category.communityId },
+        payload,
+        originUserId,
+      });
+    },
+
+    async categoryDeleted(tx, options) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'category.deleted',
+        communityId: options.communityId,
+        categoryId: options.categoryId,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'category.deleted',
+        audience: { scope: 'community', communityId: options.communityId },
+        payload,
+        originUserId: undefined,
+      });
+    },
+
+    async memberUpdated(tx, options) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'member.updated',
+        communityId: options.communityId,
+        member: options.member,
+        role: options.role,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'member.updated',
+        audience: { scope: 'community', communityId: options.communityId },
+        payload,
+        // Delivered to the actor as well. The member list shows roles, so the
+        // admin who made the change needs the same refresh everyone else gets.
+        originUserId: undefined,
+      });
+    },
+
+    async memberRemoved(tx, options) {
+      const payload: ServerEvent = {
+        ...envelope(),
+        type: 'member.removed',
+        communityId: options.communityId,
+        userId: options.userId,
+      };
+
+      await outbox.enqueue(tx, {
+        type: 'member.removed',
+        audience: { scope: 'community', communityId: options.communityId },
+        payload,
+        originUserId: undefined,
       });
     },
 

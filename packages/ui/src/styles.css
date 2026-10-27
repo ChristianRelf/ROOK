@@ -4,23 +4,26 @@
  * Tailwind 4 is configured in CSS rather than a JS config file, so this is the
  * whole theme. Imported once by the desktop app.
  *
- * The palette is a cool neutral grey with a single violet accent. Decisions
- * worth stating, because they are what keep a chat client readable for hours:
+ * The palette follows the Discord convention, because this is a Discord-shaped
+ * application and borrowing the vocabulary means the layout reads correctly on
+ * first use. Decisions worth stating, because they are what keep a chat client
+ * readable for hours:
  *
- *   * **Three surface levels, not a gradient.** `base` (chrome), `raised`
- *     (panels), `overlay` (dialogs). Depth comes from a 1px border and a
- *     small step in lightness, not from shadows or blurs.
+ *   * **Four surface levels, deepest at the edges.** The community rail is the
+ *     darkest band, the channel sidebar sits one step above it, and the
+ *     conversation is the lightest. Depth comes from those steps rather than
+ *     from borders or shadows -- which is why the dividers here are almost
+ *     invisible and the panes still read as separate.
  *
  *   * **Text has exactly four weights of emphasis.** Anything more and
- *     hierarchy stops reading as hierarchy.
+ *     hierarchy stops reading as hierarchy. Channel names use the muted
+ *     weight, and *unread* promotes them to full strength -- so "unread" is
+ *     legible without adding a colour.
  *
- *   * **Borders are nearly invisible by design** (about 8% contrast against
- *     their surface). They separate regions without drawing the eye, which is
- *     what lets the message content be the only thing with real contrast.
- *
- *   * **One accent colour**, used for the active channel, focus rings and the
- *     primary button. Reserving it means it always means "this is where you
- *     are or what you'll do next".
+ *   * **One accent (blurple), one alarm (red).** The accent marks where you
+ *     are and what you will do next; red is reserved for mentions and
+ *     destructive actions. A mention badge has to win against everything else
+ *     on screen, and it only can if nothing else is competing for red.
  */
 
 @import 'tailwindcss';
@@ -32,43 +35,63 @@
 
 @theme {
   /* --- Surfaces ------------------------------------------------------- */
-  --color-base: #0f1013;
-  --color-raised: #16181d;
-  --color-overlay: #1c1f26;
-  --color-inset: #0a0b0d;
+  /* The community rail: the darkest band, framing everything else. */
+  --color-sunken: #1a1b1e;
+  /* The channel sidebar and member list. */
+  --color-raised: #2b2d31;
+  /* The conversation pane -- the lightest surface, where the reading happens. */
+  --color-base: #313338;
+  /* Dialogs and popovers, which must read as floating above the app. */
+  --color-overlay: #313338;
+  /* Inset controls: the composer, search fields, code blocks. */
+  --color-inset: #383a40;
 
-  /* Hover and pressed states, as overlays rather than separate colours. */
-  --color-hover: #ffffff0a;
-  --color-active: #ffffff14;
+  /* Hover and pressed states, as overlays rather than separate colours, so
+     they compose correctly over any of the four surfaces. */
+  --color-hover: #ffffff0f;
+  --color-active: #ffffff1a;
+  /* The resting background of a selected channel row. */
+  --color-selected: #ffffff14;
 
   /* --- Borders -------------------------------------------------------- */
-  --color-line: #ffffff14;
+  /* Deliberately near-invisible: the surface steps already separate the panes,
+     so a visible border would only add noise. */
+  --color-line: #1e1f22;
+  --color-line-soft: #ffffff0f;
   --color-line-strong: #ffffff24;
 
   /* --- Text ----------------------------------------------------------- */
-  --color-ink: #edeef1;
-  --color-ink-muted: #a2a6b0;
-  --color-ink-subtle: #70747e;
-  --color-ink-faint: #4b4e57;
+  --color-ink: #f2f3f5;
+  --color-ink-muted: #b5bac1;
+  --color-ink-subtle: #949ba4;
+  --color-ink-faint: #6d6f78;
 
   /* --- Accent --------------------------------------------------------- */
-  --color-accent: #7c6cf5;
-  --color-accent-hover: #8b7cf7;
-  --color-accent-pressed: #6a58f0;
+  --color-accent: #5865f2;
+  --color-accent-hover: #4752c4;
+  --color-accent-pressed: #3c45a5;
   --color-accent-ink: #ffffff;
-  /* Tinted surface for the selected row. */
-  --color-accent-wash: #7c6cf51f;
+  /* Tinted surface for the active community pill and selected rows. */
+  --color-accent-wash: #5865f229;
 
   /* --- Status --------------------------------------------------------- */
-  --color-danger: #f0616d;
-  --color-danger-wash: #f0616d1f;
-  --color-warning: #e8a33d;
-  --color-success: #3ec98a;
+  /* Mentions and destructive actions. Reserved -- see the header note. */
+  --color-danger: #f23f43;
+  --color-danger-hover: #d8373b;
+  --color-danger-wash: #f23f4324;
+  --color-warning: #f0b232;
+  --color-success: #23a559;
 
   /* Presence and connection dots. */
-  --color-online: #3ec98a;
-  --color-connecting: #e8a33d;
-  --color-offline: #70747e;
+  --color-online: #23a559;
+  --color-idle: #f0b232;
+  --color-connecting: #f0b232;
+  --color-offline: #80848e;
+
+  /* Role colours for the member list, so an owner and an admin are
+     distinguishable at a glance without reading a badge. */
+  --color-role-owner: #f0b232;
+  --color-role-admin: #5865f2;
 
   /* --- Typography ----------------------------------------------------- */
   /* System stack: a chat client should look native, and shipping a webfont
@@ -83,7 +106,7 @@
   --text-2xs--line-height: 1rem;
 
   /* --- Radii ---------------------------------------------------------- */
-  --radius-control: 0.375rem;
+  --radius-control: 0.25rem;
   --radius-panel: 0.5rem;
   --radius-pill: 9999px;
 
@@ -100,8 +123,8 @@
 
 @layer base {
   * {
-    /* Borders default to transparent so a utility like `border` does not
-       silently paint a browser-default colour. */
+    /* Borders default to the divider colour so a utility like `border` does
+       not silently paint a browser default. */
     border-color: var(--color-line);
   }
 
@@ -117,7 +140,7 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.375;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     /* This is a desktop application window, not a document: the page itself
@@ -149,12 +172,12 @@
      and loud scrollbars make the layout look busier than it is. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-line-strong) transparent;
+    scrollbar-color: var(--color-line) transparent;
   }
 
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
 
   *::-webkit-scrollbar-track {
@@ -162,15 +185,15 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: var(--color-line-strong);
+    background-color: #1a1b1e;
     border-radius: var(--radius-pill);
     /* Inset the thumb so it does not touch the pane edge. */
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background-color: #ffffff38;
+    background-color: #111214;
   }
 
   /* Respect the OS setting. Animation here is confirmation, so removing it
@@ -216,6 +239,29 @@
 
   .animate-soft-pulse {
     animation: rook-pulse 1.6s ease-in-out infinite;
+  }
+
+  /*
+   * The selection indicator on the community rail.
+   *
+   * A white pill on the left edge that grows with state: a short stub for a
+   * community with unread messages, a full bar for the selected one. Drawn as
+   * a pseudo-element on a wrapper rather than as a sibling element so the
+   * height can be animated without affecting layout.
+   */
+  .rail-pill::before {
+    content: '';
+    position: absolute;
+    left: -0.5rem;
+    top: 50%;
+    width: 0.25rem;
+    height: var(--rail-pill-height, 0);
+    transform: translateY(-50%);
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    background-color: var(--color-ink);
+    transition:
+      height var(--duration-normal) var(--ease-out-soft),
+      opacity var(--duration-fast) linear;
   }
 
   /* Drag region for the custom title bar. */

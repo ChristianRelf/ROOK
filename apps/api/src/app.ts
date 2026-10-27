@@ -5,8 +5,10 @@ import rateLimit from '@fastify/rate-limit';
 import { Redis } from 'ioredis';
 import type { AppContext } from './context.js';
 import { registerErrorHandler, registerRequestContext } from './plugins/core.js';
+import { registerAdministrationRoutes } from './routes/administration.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerCommunityRoutes } from './routes/communities.js';
+import { registerReadStateRoutes } from './routes/read-state.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerMessageRoutes } from './routes/messages.js';
@@ -121,6 +123,8 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   registerHealthRoutes(app, context);
   registerAuthRoutes(app, context);
   registerCommunityRoutes(app, context);
+  registerAdministrationRoutes(app, context);
+  registerReadStateRoutes(app, context);
   registerMessageRoutes(app, context);
   registerMediaRoutes(app, context);
 

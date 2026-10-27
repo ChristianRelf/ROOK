@@ -3,6 +3,10 @@ import { createUserRepository, type UserRepository } from './users.js';
 import { createSessionRepository, type SessionRepository } from './sessions.js';
 import { createCommunityRepository, type CommunityRepository } from './communities.js';
 import { createChannelRepository, type ChannelRepository } from './channels.js';
+import { createCategoryRepository, type CategoryRepository } from './categories.js';
+import { createInviteRepository, type InviteRepository } from './invites.js';
+import { createAuditRepository, type AuditRepository } from './audit.js';
+import { createReadStateRepository, type ReadStateRepository } from './read-state.js';
 import { createMessageRepository, type MessageRepository } from './messages.js';
 import { createMediaRepository, type MediaRepository } from './media.js';
 import { createOutboxRepository, type OutboxRepository } from './outbox.js';
@@ -22,6 +26,10 @@ export interface Repositories {
   readonly sessions: SessionRepository;
   readonly communities: CommunityRepository;
   readonly channels: ChannelRepository;
+  readonly categories: CategoryRepository;
+  readonly invites: InviteRepository;
+  readonly audit: AuditRepository;
+  readonly readState: ReadStateRepository;
   readonly messages: MessageRepository;
   readonly media: MediaRepository;
   readonly outbox: OutboxRepository;
@@ -33,6 +41,10 @@ export function createRepositories(db: Queryable): Repositories {
     sessions: createSessionRepository(db),
     communities: createCommunityRepository(db),
     channels: createChannelRepository(db),
+    categories: createCategoryRepository(db),
+    invites: createInviteRepository(db),
+    audit: createAuditRepository(db),
+    readState: createReadStateRepository(db),
     messages: createMessageRepository(db),
     media: createMediaRepository(db),
     outbox: createOutboxRepository(db),

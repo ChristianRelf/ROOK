@@ -1,4 +1,4 @@
-import { communityRoleRank, type CommunityRole } from '@rook/contracts';
+import { communityRoleRank, type CommunityRole } from './entities/community.js';
 
 /**
  * Capability resolution.
@@ -11,6 +11,17 @@ import { communityRoleRank, type CommunityRole } from '@rook/contracts';
  *   * the rules are unit-testable without a database or an HTTP server;
  *   * replacing the role enum with granular permission bits later changes this
  *     file and nothing else.
+ *
+ * This lives in `contracts` rather than in `auth` so the desktop client can
+ * resolve the *same* rules the server enforces. That is what keeps the UI from
+ * offering an action the API will refuse — a button that fails on click reads
+ * as a bug, not as a permission boundary. It costs nothing to share: these are
+ * pure functions over an enum, with no dependency on hashing, tokens or a
+ * database, so including them in the client bundle pulls in nothing else.
+ *
+ * Sharing them is safe because they are not the enforcement point. The server
+ * runs these checks against a membership it looked up itself; the client runs
+ * them against a role the server told it about, purely to decide what to draw.
  *
  * Roles are ordered (`member` < `admin` < `owner`), so most rules reduce to a
  * minimum-rank check. The exceptions are the capabilities where ownership of
@@ -26,6 +37,14 @@ export const capabilities = [
   'channel:create',
   'channel:update',
   'channel:delete',
+  'category:create',
+  'category:update',
+  'category:delete',
+  'member:manage_roles',
+  'member:kick',
+  'invite:create',
+  'invite:revoke',
+  'audit_log:view',
   'message:read',
   'message:send',
   'message:edit_own',
@@ -50,6 +69,28 @@ const minimumRole: Readonly<Record<Capability, CommunityRole>> = {
   'channel:create': 'member',
   'channel:update': 'admin',
   'channel:delete': 'admin',
+
+  // Categories are sidebar structure for the whole community, so unlike
+  // creating a channel this is an admin concern: one member reorganising
+  // everyone else's sidebar is not a small change.
+  'category:create': 'admin',
+  'category:update': 'admin',
+  'category:delete': 'admin',
+
+  // Moderation. `member:kick` is admin, but see `canManageMember` below: rank
+  // alone is not sufficient, because an admin must not be able to kick a peer.
+  'member:manage_roles': 'admin',
+  'member:kick': 'admin',
+
+  // Any member may invite, matching how small communities actually work, but
+  // only an admin may revoke someone else's invite.
+  'invite:create': 'member',
+  'invite:revoke': 'admin',
+
+  // The log records administrative action, so it is readable by the people who
+  // can take it. Exposing it to every member would turn "who demoted me" into
+  // a question the UI answers, which is a moderation problem, not a feature.
+  'audit_log:view': 'admin',
 
   'message:read': 'member',
   'message:send': 'member',
@@ -102,6 +143,45 @@ export function canDeleteMessage(
     return can(context, 'message:delete_own');
   }
   return can(context, 'message:delete_any');
+}
+
+/**
+ * Whether `actor` may act on `target` within the same community.
+ *
+ * This is the rule that a minimum-rank check cannot express, and the one that
+ * matters most once there is a role management UI: an admin outranks a member,
+ * but **not another admin**. Without a strict-inequality check, any admin could
+ * demote or remove every other admin, and the first disagreement between two
+ * admins becomes a race to click first. The owner is above everyone, and
+ * nobody — including the owner — may act on themselves through this path.
+ *
+ * Self-action is excluded so the UI never offers "demote yourself" or "kick
+ * yourself" as an administrative action. Leaving a community voluntarily is a
+ * separate operation with separate confirmation.
+ */
+export function canManageMember(
+  actor: { role: CommunityRole; userId: string },
+  target: { role: CommunityRole; userId: string },
+): boolean {
+  if (actor.userId === target.userId) return false;
+  // The owner cannot be demoted or removed by anyone: ownership transfer is a
+  // deliberate, separate operation and is out of scope in this release.
+  if (target.role === 'owner') return false;
+  return communityRoleRank[actor.role] > communityRoleRank[target.role];
+}
+
+/**
+ * Whether `actor` may assign `role`.
+ *
+ * Granting a role at or above your own is refused, so an admin cannot promote
+ * someone to a position from which they could then act on the admin who
+ * promoted them. `owner` is unassignable here by construction — it is not in
+ * the assignable set the contract exposes — but the rank check covers it
+ * regardless, so a hand-written request cannot sneak it past.
+ */
+export function canAssignRole(actorRole: CommunityRole, role: CommunityRole): boolean {
+  if (!can({ role: actorRole }, 'member:manage_roles')) return false;
+  return communityRoleRank[actorRole] > communityRoleRank[role];
 }
 
 /** The capabilities a role holds, for sending to the client to drive the UI. */

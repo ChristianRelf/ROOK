@@ -38,3 +38,16 @@ export {
   type StatusDotProps,
   type TextareaProps,
 } from './components/primitives.js';
+
+export {
+  Menu,
+  Select,
+  Tooltip,
+  UnreadDot,
+  UnreadPill,
+  type MenuItem,
+  type MenuProps,
+  type SelectProps,
+  type TooltipProps,
+  type UnreadPillProps,
+} from './components/menu.js';

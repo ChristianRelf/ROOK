@@ -21,12 +21,31 @@ export const limits = {
   channelNameMin: 1,
   channelNameMax: 64,
   channelTopicMax: 512,
+  categoryNameMin: 1,
+  categoryNameMax: 64,
+  inviteCodeMin: 6,
+  inviteCodeMax: 32,
   messageContentMax: 4000,
   /** Default page size for message history. */
   messagePageDefault: 50,
   messagePageMax: 100,
   memberPageDefault: 50,
   memberPageMax: 200,
+  auditPageDefault: 50,
+  auditPageMax: 100,
+  /**
+   * Distinct user mentions one message may notify.
+   *
+   * Bounded so a single message cannot write a mention row per member of a
+   * large community and badge everyone at once.
+   */
+  mentionsPerMessage: 20,
+  /** Active invites one community may hold at a time. */
+  invitesPerCommunity: 50,
+  /** Categories one community may hold. */
+  categoriesPerCommunity: 50,
+  /** Above this, the sidebar shows "99+" rather than a wider badge. */
+  unreadBadgeMax: 99,
 } as const;
 
 /**
@@ -96,6 +115,37 @@ export const channelNameSchema = z
   });
 
 export const channelTopicSchema = z.string().trim().max(limits.channelTopicMax);
+
+/**
+ * Category names are presentation only, so they are permissive where channel
+ * names are not: a category is a heading in the sidebar, never part of a URL
+ * or a mention, so there is nothing for a slug to protect.
+ */
+export const categoryNameSchema = z
+  .string()
+  .trim()
+  .min(limits.categoryNameMin, 'must not be empty')
+  .max(limits.categoryNameMax, `must be at most ${limits.categoryNameMax} characters`)
+  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), {
+    error: 'must not contain control characters',
+  });
+
+/**
+ * Invite codes.
+ *
+ * URL-safe base64 characters so a code can be pasted into a link unescaped,
+ * and case-sensitive so a shorter code carries the same entropy. Unlike a join
+ * code, this is never meant to be read aloud -- it is meant to be copied.
+ */
+export const inviteCodeSchema = z
+  .string()
+  .trim()
+  .min(limits.inviteCodeMin)
+  .max(limits.inviteCodeMax)
+  .regex(/^[A-Za-z0-9_-]+$/u, 'is not a valid invite code');
+
+/** Non-negative ordering position within a sidebar list. */
+export const positionSchema = z.number().int().nonnegative();
 
 /**
  * Message body.

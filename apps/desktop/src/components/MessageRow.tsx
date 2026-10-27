@@ -4,6 +4,8 @@ import { Avatar, Button, Textarea, cn } from '@rook/ui';
 import { limits, type ChannelId, type Message } from '@rook/contracts';
 import { useDeleteMessage, useEditMessage } from '../lib/queries.js';
 import { MessageAttachment } from './MessageAttachment.jsx';
+import { MessageContent } from './MessageContent.jsx';
+import { useMentionsMe } from '../lib/mentions.js';
 
 /**
  * One confirmed message.
@@ -13,9 +15,13 @@ import { MessageAttachment } from './MessageAttachment.jsx';
  * it. That is what keeps a fast back-and-forth readable instead of a wall of
  * repeated names.
  *
- * Content is rendered as plain text in a `<p>`, never as HTML. React escapes
- * it, so a message containing markup is displayed literally — there is no
- * sanitiser to get wrong because nothing is ever interpreted.
+ * Content is rendered as plain text, never as HTML. React escapes it, so a
+ * message containing markup is displayed literally — there is no sanitiser to
+ * get wrong because nothing is ever interpreted. `MessageContent` splits it
+ * into mention and text segments, each still rendered as a text child.
+ *
+ * A message that mentions the reader gets a left bar and a tinted background,
+ * so it is findable while scrolling past without having to read every line.
  */
 
 /** Messages closer together than this from one author are grouped. */
@@ -39,6 +45,7 @@ export function MessageRow({
   const remove = useDeleteMessage();
 
   const deleted = message.deletedAt !== null;
+  const mentionsMe = useMentionsMe(message);
 
   const grouped =
     previous !== undefined &&
@@ -87,7 +94,15 @@ export function MessageRow({
   }
 
   return (
-    <div className={cn('group relative px-4 hover:bg-hover/50', grouped ? 'py-0.5' : 'mt-3 py-1')}>
+    <div
+      className={cn(
+        'group relative px-4 hover:bg-hover/50',
+        grouped ? 'py-0.5' : 'mt-3 py-1',
+        // The bar is an inset shadow rather than a border so it does not add
+        // to the row's width and shift the text by 2px when it appears.
+        mentionsMe && 'bg-warning/[0.06] shadow-[inset_2px_0_0_0_var(--color-warning)]',
+      )}
+    >
       <div className="flex gap-3">
         {grouped ? (
           // Keeps the text aligned with the grouped message above, and shows
@@ -146,7 +161,7 @@ export function MessageRow({
             </div>
           ) : (
             <p className="selectable whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
-              {message.content}
+              <MessageContent content={message.content ?? ''} />
               {message.editedAt !== null ? (
                 <span
                   className="ml-1.5 text-2xs text-ink-faint"
